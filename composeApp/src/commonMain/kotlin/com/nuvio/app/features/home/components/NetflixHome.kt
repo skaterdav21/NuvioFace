@@ -44,6 +44,11 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -252,6 +257,7 @@ private fun NetflixPhoneHomeContent(
     modifier: Modifier = Modifier,
 ) {
     var filter by remember { mutableStateOf(NetflixHomeFilter.All) }
+    var preview by remember { mutableStateOf<MetaPreview?>(null) }
     val scope = rememberCoroutineScope()
     val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val topBarHeight = statusBarTop + 96.dp
@@ -300,6 +306,28 @@ private fun NetflixPhoneHomeContent(
     val scrolled by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 60 }
     }
+    val top10Keys = remember(entries) {
+        entries.filterIsInstance<NetflixEntry.Row>()
+            .firstOrNull { it.top10 }
+            ?.let { (it.row as? NetflixHomeRow.Catalog)?.entries?.take(10)?.map { item -> item.stableKey() }?.toSet() }
+            .orEmpty()
+    }
+    preview?.let { item ->
+        NetflixPreviewSheet(
+            item = item,
+            onDismiss = { preview = null },
+            onOpen = {
+                preview = null
+                onPosterClick?.invoke(item)
+            },
+            onMore = onPosterLongClick?.let { more ->
+                {
+                    preview = null
+                    more(item)
+                }
+            },
+        )
+    }
 
     Box(modifier = modifier.fillMaxSize().background(NetflixColors.Black)) {
         LazyColumn(
@@ -329,7 +357,7 @@ private fun NetflixPhoneHomeContent(
                             NetflixTop10Row(
                                 title = row.title,
                                 entries = row.entries.take(10),
-                                onClick = onPosterClick,
+                                onClick = { preview = it },
                                 onLongClick = onPosterLongClick,
                             )
                         } else {
@@ -338,8 +366,9 @@ private fun NetflixPhoneHomeContent(
                                 entries = row.entries,
                                 watchedKeys = watchedKeys,
                                 fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
+                                top10Keys = top10Keys,
                                 onViewAll = row.onViewAll,
-                                onClick = onPosterClick,
+                                onClick = { preview = it },
                                 onLongClick = onPosterLongClick,
                             )
                         }
@@ -744,6 +773,7 @@ private fun NetflixPosterRow(
     entries: List<MetaPreview>,
     watchedKeys: Set<String>,
     fullyWatchedSeriesKeys: Set<String>,
+    top10Keys: Set<String> = emptySet(),
     onViewAll: (() -> Unit)?,
     onClick: ((MetaPreview) -> Unit)?,
     onLongClick: ((MetaPreview) -> Unit)?,
@@ -766,6 +796,7 @@ private fun NetflixPosterRow(
                     item = item,
                     landscape = landscape,
                     watched = watched,
+                    top10 = item.stableKey() in top10Keys,
                     onClick = { onClick?.invoke(item) },
                     onLongClick = onLongClick?.let { { it(item) } },
                 )
@@ -783,6 +814,7 @@ private fun NetflixPoster(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     width: Dp = if (landscape) 186.dp else NetflixPosterWidth,
+    top10: Boolean = false,
 ) {
     val imageUrl = if (landscape) item.landscapePoster ?: item.banner ?: item.poster else item.poster ?: item.rawPosterUrl
     Box(
@@ -817,6 +849,7 @@ private fun NetflixPoster(
                     .padding(8.dp),
             )
         }
+        if (top10) NetflixTop10Badge(Modifier.align(Alignment.TopEnd))
         if (watched) {
             Box(
                 modifier = Modifier
@@ -1528,6 +1561,164 @@ private fun NetflixTvTop10Row(
                     }
                 }
             }
+        }
+    }
+}
+
+
+/** Netflix's little red "TOP 10" corner badge. */
+@Composable
+private fun NetflixTop10Badge(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(bottomStart = 3.dp))
+            .background(NetflixColors.Red)
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "TOP",
+            style = TextStyle(fontFamily = NetflixSans, fontWeight = FontWeight.Bold, fontSize = 7.sp, lineHeight = 8.sp, color = Color.White),
+        )
+        Text(
+            text = "10",
+            style = TextStyle(fontFamily = NetflixSans, fontWeight = FontWeight.Black, fontSize = 12.sp, lineHeight = 12.sp, color = Color.White),
+        )
+    }
+}
+
+/**
+ * Netflix's phone preview: tapping a poster slides up a sheet with the art, synopsis,
+ * a big Play button, My List, and "Episodes & Info" for the full page.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NetflixPreviewSheet(
+    item: MetaPreview,
+    onDismiss: () -> Unit,
+    onOpen: () -> Unit,
+    onMore: (() -> Unit)?,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    val libraryState by LibraryRepository.uiState.collectAsStateWithLifecycle()
+    val saved = remember(libraryState, item.id, item.type) { LibraryRepository.isSaved(item.id, item.type) }
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = NetflixColors.Elevated,
+        dragHandle = null,
+        shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth()) {
+                AsyncImage(
+                    model = item.poster ?: item.rawPosterUrl,
+                    contentDescription = item.name,
+                    modifier = Modifier
+                        .width(104.dp)
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(NetflixColors.Card),
+                    contentScale = ContentScale.Crop,
+                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.Top) {
+                        Text(
+                            text = item.name,
+                            modifier = Modifier.weight(1f),
+                            style = TextStyle(fontFamily = NetflixSans, fontWeight = FontWeight.Bold, fontSize = 19.sp, lineHeight = 23.sp, color = Color.White),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .size(30.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.18f))
+                                .clickable(onClick = onDismiss),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                    val meta = listOfNotNull(
+                        item.releaseInfo?.takeIf { it.isNotBlank() },
+                        item.ageRating?.takeIf { it.isNotBlank() },
+                        item.runtime?.takeIf { it.isNotBlank() },
+                    )
+                    if (meta.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = meta.joinToString("   "),
+                            style = TextStyle(fontFamily = NetflixSans, fontSize = 13.sp, color = NetflixColors.TextSecondary),
+                            maxLines = 1,
+                        )
+                    }
+                    if (!item.description.isNullOrBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = item.description.orEmpty(),
+                            style = TextStyle(fontFamily = NetflixSans, fontSize = 13.sp, lineHeight = 18.sp, color = Color.White),
+                            maxLines = 5,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                NetflixPlayButton(
+                    label = "Play",
+                    onClick = onOpen,
+                    modifier = Modifier.weight(1f),
+                    height = 42.dp,
+                )
+                Spacer(Modifier.width(14.dp))
+                com.nuvio.app.core.ui.NetflixIconAction(
+                    icon = if (saved) Icons.Rounded.Check else Icons.Rounded.Add,
+                    label = "My List",
+                    onClick = {
+                        scope.launch {
+                            runCatching { LibraryRepository.toggleSaved(item.toLibraryItem(savedAtEpochMs = 0L)) }
+                                .onSuccess { if (it.requiresRemovalConfirmation) onMore?.invoke() }
+                                .onFailure { NuvioToastController.show(it.message ?: "Couldn't update My List") }
+                        }
+                    },
+                )
+                if (onMore != null) {
+                    com.nuvio.app.core.ui.NetflixIconAction(
+                        icon = Icons.Rounded.MoreVert,
+                        label = "More",
+                        onClick = onMore,
+                    )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            Box(Modifier.fillMaxWidth().height(0.5.dp).background(Color.White.copy(alpha = 0.15f)))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpen)
+                    .padding(vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.Info, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = if (item.type.isShowType()) "Episodes & Info" else "Details & More",
+                    modifier = Modifier.weight(1f),
+                    style = TextStyle(fontFamily = NetflixSans, fontWeight = FontWeight.Medium, fontSize = 15.sp, color = Color.White),
+                )
+                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = NetflixColors.TextSecondary)
+            }
+            Spacer(Modifier.height(8.dp))
         }
     }
 }

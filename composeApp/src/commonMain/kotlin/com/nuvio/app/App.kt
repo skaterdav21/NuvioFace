@@ -1,5 +1,6 @@
 package com.nuvio.app
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -111,6 +112,9 @@ internal fun AppEnvironment(content: @Composable () -> Unit) {
         customThemeColors = customThemeColors,
         netflixFace = netflixFaceEnabled,
     ) {
-        content()
+        androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+            content()
+            if (netflixFaceEnabled) com.nuvio.app.core.ui.NetflixIntro()
+        }
     }
 }

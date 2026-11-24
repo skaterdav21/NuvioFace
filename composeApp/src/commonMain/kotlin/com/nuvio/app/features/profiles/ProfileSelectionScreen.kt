@@ -1,5 +1,7 @@
 package com.nuvio.app.features.profiles
 
+import com.nuvio.app.core.ui.netflixFaceActive
+import com.nuvio.app.core.ui.netflixFocusHighlight
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -350,6 +352,8 @@ private fun ProfileAvatarCard(
         launch { animOffset.animateTo(0f, tween(500, easing = FastOutSlowInEasing)) }
     }
 
+    // Netflix face: rounded-square avatars instead of circles.
+    val avatarShape = if (netflixFaceActive()) RoundedCornerShape(6.dp) else CircleShape
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale = if (isPressed) 0.95f else 1f
@@ -364,6 +368,7 @@ private fun ProfileAvatarCard(
                 scaleY = animScale.value * pressScale
                 translationY = animOffset.value
             }
+            .netflixFocusHighlight(RoundedCornerShape(20.dp), focusedScale = 1.08f)
             .clip(RoundedCornerShape(20.dp))
             .clickable(
                 enabled = enabled,
@@ -382,7 +387,7 @@ private fun ProfileAvatarCard(
                 Box(
                     modifier = Modifier
                         .size(110.dp)
-                        .clip(CircleShape)
+                        .clip(avatarShape)
                         .background(bgColor.copy(alpha = 0.2f)),
                 )
             }
@@ -390,7 +395,7 @@ private fun ProfileAvatarCard(
             Box(
                 modifier = Modifier
                     .size(100.dp)
-                    .clip(CircleShape)
+                    .clip(avatarShape)
                     .background(
                         if (avatarItem != null) {
                             avatarItem.bgColor?.let { parseHexColor(it) } ?: avatarColor
@@ -399,7 +404,7 @@ private fun ProfileAvatarCard(
                         },
                     )
                     .then(
-                        if (avatarImageUrl == null) Modifier.border(2.dp, avatarColor.copy(alpha = 0.4f), CircleShape)
+                        if (avatarImageUrl == null) Modifier.border(2.dp, avatarColor.copy(alpha = 0.4f), avatarShape)
                         else Modifier,
                     ),
                 contentAlignment = Alignment.Center,
@@ -408,7 +413,7 @@ private fun ProfileAvatarCard(
                     AsyncImage(
                         model = avatarImageUrl,
                         contentDescription = avatarItem?.displayName ?: profile.name,
-                        modifier = Modifier.size(100.dp).clip(CircleShape),
+                        modifier = Modifier.size(100.dp).clip(avatarShape),
                         contentScale = ContentScale.Crop,
                     )
                 } else if (profile.name.isNotBlank()) {
@@ -500,6 +505,8 @@ private fun AddProfileCard(
         launch { animOffset.animateTo(0f, tween(500, easing = FastOutSlowInEasing)) }
     }
 
+    // Netflix face: rounded-square avatars instead of circles.
+    val avatarShape = if (netflixFaceActive()) RoundedCornerShape(6.dp) else CircleShape
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val pressScale = if (isPressed) 0.95f else 1f
@@ -514,6 +521,7 @@ private fun AddProfileCard(
                 scaleY = animScale.value * pressScale
                 translationY = animOffset.value
             }
+            .netflixFocusHighlight(RoundedCornerShape(20.dp), focusedScale = 1.08f)
             .clip(RoundedCornerShape(20.dp))
             .clickable(
                 enabled = enabled,
@@ -530,12 +538,12 @@ private fun AddProfileCard(
             Box(
                 modifier = Modifier
                     .size(100.dp)
-                    .clip(CircleShape)
+                    .clip(avatarShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                     .border(
                         2.dp,
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
-                        CircleShape,
+                        avatarShape,
                     ),
                 contentAlignment = Alignment.Center,
             ) {

@@ -1,5 +1,11 @@
 package com.nuvio.app.features.player.skip
 
+import com.nuvio.app.core.ui.netflixFaceActive
+import com.nuvio.app.core.ui.netflixFocusHighlight
+import com.nuvio.app.core.ui.NetflixSans
+import com.nuvio.app.core.ui.NuvioDevice
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
@@ -106,6 +112,18 @@ fun NextEpisodeCard(
             fadeOut(animationSpec = tween(160)),
         modifier = modifier,
     ) {
+        if (netflixFaceActive()) {
+            NetflixNextEpisode(
+                nextEpisode = nextEpisode,
+                isPlayable = isPlayable,
+                isAutoPlaySearching = isAutoPlaySearching,
+                autoPlaySourceName = autoPlaySourceName,
+                autoPlayCountdownSec = autoPlayCountdownSec,
+                onPlayNext = onPlayNext,
+                onDismiss = onDismiss,
+            )
+            return@AnimatedVisibility
+        }
         val shape = RoundedCornerShape(16.dp)
         Row(
             modifier = Modifier
@@ -248,6 +266,91 @@ fun NextEpisodeCard(
                     color = if (isPlayable) Color.White else Color.White.copy(alpha = 0.72f),
                     fontSize = 11.sp,
                     modifier = Modifier.padding(start = 3.dp),
+                )
+            }
+        }
+    }
+}
+
+
+/** Netflix's end-of-episode buttons: "Watch Credits" and a white "Next Episode" with the countdown. */
+@Composable
+private fun NetflixNextEpisode(
+    nextEpisode: NextEpisodeInfo,
+    isPlayable: Boolean,
+    isAutoPlaySearching: Boolean,
+    autoPlaySourceName: String?,
+    autoPlayCountdownSec: Int?,
+    onPlayNext: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val nextFocus = remember { FocusRequester() }
+    if (NuvioDevice.isTv) {
+        LaunchedEffect(nextEpisode.videoId) {
+            kotlinx.coroutines.delay(150)
+            runCatching { nextFocus.requestFocus() }
+        }
+    }
+    Column(horizontalAlignment = Alignment.End) {
+        val status = when {
+            !isPlayable && !nextEpisode.unairedMessage.isNullOrBlank() -> nextEpisode.unairedMessage
+            isAutoPlaySearching -> stringResource(Res.string.player_next_episode_finding_source)
+            else -> "S${nextEpisode.season}:E${nextEpisode.episode}  ${nextEpisode.title}"
+        }
+        Text(
+            text = status.orEmpty(),
+            color = Color.White.copy(alpha = 0.85f),
+            fontSize = 13.sp,
+            fontFamily = NetflixSans,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.widthIn(max = 360.dp),
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .netflixFocusHighlight(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable(onClick = onDismiss)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            ) {
+                Text(
+                    text = "Watch Credits",
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = NetflixSans,
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Row(
+                modifier = Modifier
+                    .netflixFocusHighlight(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(if (isPlayable) Color.White else Color.White.copy(alpha = 0.4f))
+                    .focusRequester(nextFocus)
+                    .clickable(enabled = isPlayable, onClick = onPlayNext)
+                    .padding(start = 12.dp, end = 18.dp, top = 9.dp, bottom = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.Black,
+                    modifier = Modifier.size(26.dp),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (autoPlayCountdownSec != null && !autoPlaySourceName.isNullOrBlank()) {
+                        "Next Episode ($autoPlayCountdownSec)"
+                    } else {
+                        "Next Episode"
+                    },
+                    color = Color.Black,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = NetflixSans,
                 )
             }
         }

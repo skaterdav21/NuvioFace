@@ -1,5 +1,7 @@
 package com.nuvio.app.features.player.skip
 
+import com.nuvio.app.core.ui.netflixFocusHighlight
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -9,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -110,6 +113,37 @@ fun SkipIntroButton(
         exit = fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.8f),
         modifier = modifier,
     ) {
+        if (com.nuvio.app.core.ui.netflixFaceActive()) {
+            // Netflix: a plain bordered box, "Skip Intro". On TV it takes the remote's focus.
+            val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+            if (com.nuvio.app.core.ui.NuvioDevice.isTv) {
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(150)
+                    runCatching { focus.requestFocus() }
+                }
+            }
+            val boxShape = RoundedCornerShape(4.dp)
+            Row(
+                modifier = Modifier
+                    .netflixFocusHighlight(boxShape, focusedScale = 1.08f)
+                    .clip(boxShape)
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .border(1.5.dp, Color.White.copy(alpha = 0.9f), boxShape)
+                    .focusRequester(focus)
+                    .clickable(enabled = canSkip) { onSkip() }
+                    .padding(horizontal = 22.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = skipLabel(lastType, lastSkipsToPostCredits),
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    fontFamily = com.nuvio.app.core.ui.NetflixSans,
+                )
+            }
+            return@AnimatedVisibility
+        }
         val shape = RoundedCornerShape(16.dp)
         Column(
             modifier = Modifier
@@ -170,3 +204,4 @@ private fun skipLabel(type: String?, skipsToPostCredits: Boolean): String =
         )
         else -> stringResource(Res.string.player_skip)
     }
+

@@ -1,5 +1,13 @@
 package com.nuvio.app.features.details
 
+import com.nuvio.app.core.ui.netflixFaceActive
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.nuvio.app.core.ui.netflixFocusHighlight
+import com.nuvio.app.core.ui.NetflixColors
+import com.nuvio.app.core.ui.NetflixSans
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -212,10 +220,14 @@ fun MetaDetailsScreen(
     val uiState by MetaDetailsRepository.uiState.collectAsStateWithLifecycle()
     val displayedMeta = uiState.meta?.takeIf { it.type == type && it.id == id }
         ?: MetaDetailsRepository.peek(type, id)
-    val metaScreenSettingsUiState by remember {
+    val rawMetaScreenSettingsUiState by remember {
         MetaScreenSettingsRepository.ensureLoaded()
         MetaScreenSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
+    val netflixFaceDetails = netflixFaceActive()
+    val metaScreenSettingsUiState = remember(rawMetaScreenSettingsUiState, netflixFaceDetails) {
+        if (netflixFaceDetails) rawMetaScreenSettingsUiState.withNetflixTabs() else rawMetaScreenSettingsUiState
+    }
     val mdbListSettings by remember {
         MdbListSettingsRepository.ensureLoaded()
         MdbListSettingsRepository.uiState
@@ -2519,12 +2531,133 @@ private fun ConfiguredMetaSections(
     }
 }
 
+/**
+ * Netflix face: Netflix's section order, with Episodes / Collection / More Like This / Trailers & More
+ * as one tab group under the actions. The user's own choices of which sections to show still apply.
+ */
+private const val NetflixTabGroup = 9001
+
+private fun MetaScreenSettingsUiState.withNetflixTabs(): MetaScreenSettingsUiState {
+    val netflixOrder = listOf(
+        MetaScreenSectionKey.ACTIONS,
+        MetaScreenSectionKey.OVERVIEW,
+        MetaScreenSectionKey.CAST,
+        MetaScreenSectionKey.PRODUCTION,
+        MetaScreenSectionKey.EPISODES,
+        MetaScreenSectionKey.COLLECTION,
+        MetaScreenSectionKey.MORE_LIKE_THIS,
+        MetaScreenSectionKey.TRAILERS,
+        MetaScreenSectionKey.DETAILS,
+        MetaScreenSectionKey.COMMENTS,
+    )
+    val tabbed = setOf(
+        MetaScreenSectionKey.EPISODES,
+        MetaScreenSectionKey.COLLECTION,
+        MetaScreenSectionKey.MORE_LIKE_THIS,
+        MetaScreenSectionKey.TRAILERS,
+    )
+    val reordered = items
+        .sortedBy { item -> netflixOrder.indexOf(item.key).let { if (it < 0) Int.MAX_VALUE else it } }
+        .mapIndexed { index, item ->
+            item.copy(
+                order = index,
+                tabGroup = if (item.key in tabbed) NetflixTabGroup else null,
+                title = when (item.key) {
+                    MetaScreenSectionKey.EPISODES -> "Episodes"
+                    MetaScreenSectionKey.COLLECTION -> "Collection"
+                    MetaScreenSectionKey.MORE_LIKE_THIS -> "More Like This"
+                    MetaScreenSectionKey.TRAILERS -> "Trailers & More"
+                    else -> item.title
+                },
+            )
+        }
+    return copy(items = reordered, tabLayout = true)
+}
+
+/** Netflix's tab strip: bold labels, a thin rule, and a red bar on top of the selected tab. */
+@Composable
+private fun NetflixTabStrip(
+    titles: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(Color.White.copy(alpha = 0.18f))
+                .align(Alignment.TopStart),
+        )
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
+            titles.forEachIndexed { index, title ->
+                val selected = index == selectedIndex
+                Column(
+                    modifier = Modifier
+                        .width(androidx.compose.foundation.layout.IntrinsicSize.Max)
+                        .netflixFocusHighlight(RoundedCornerShape(4.dp), focusedScale = 1.04f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onSelect(index) },
+                    horizontalAlignment = Alignment.Start,
+                ) {
+                    Box(
+                        Modifier
+                            .height(4.dp)
+                            .fillMaxWidth()
+                            .background(if (selected) NetflixColors.Red else Color.Transparent),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = title.uppercase(),
+                        style = androidx.compose.ui.text.TextStyle(
+                            fontFamily = NetflixSans,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            fontSize = 14.sp,
+                            letterSpacing = 0.5.sp,
+                        ),
+                        color = if (selected) Color.White else NetflixColors.TextSecondary,
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun TabbedSectionGroup(
     tabs: List<Pair<MetaScreenSectionKey, String>>,
     content: @Composable (MetaScreenSectionKey) -> Unit,
 ) {
     if (tabs.isEmpty()) return
+    if (netflixFaceActive()) {
+        var netflixSelected by remember { mutableIntStateOf(0) }
+        val index = netflixSelected.coerceIn(0, tabs.lastIndex)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            NetflixTabStrip(
+                titles = tabs.map { it.second },
+                selectedIndex = index,
+                onSelect = { netflixSelected = it },
+            )
+            Crossfade(
+                targetState = tabs[index].first,
+                animationSpec = tween(durationMillis = 180),
+                label = "netflixTabCrossfade",
+            ) { activeKey ->
+                content(activeKey)
+            }
+        }
+        return
+    }
 
     var selectedIndex by remember { mutableIntStateOf(0) }
     val clampedIndex = selectedIndex.coerceIn(0, tabs.lastIndex)
