@@ -17,6 +17,10 @@ import com.nuvio.app.core.ui.NetflixBottomBarItem
 import com.nuvio.app.core.ui.NetflixTopNav
 import com.nuvio.app.core.ui.NetflixTopNavItem
 import com.nuvio.app.core.ui.netflixFaceActive
+import com.nuvio.app.core.ui.NetflixNav
+import com.nuvio.app.core.ui.NuvioDevice
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -84,6 +88,12 @@ internal fun MainTabsDestination(
         val navBarScrollState = rememberNuvioNavBarScrollState()
         val navBarHazeState = rememberHazeState()
         val navBarStyleSetting by remember { ThemeSettingsRepository.navBarStyle }.collectAsStateWithLifecycle()
+        val netflixNewAndHot by NetflixNav.newAndHot.collectAsStateWithLifecycle()
+        val netflixTab: (AppScreenTab, Boolean) -> Unit = { tab, newAndHot ->
+            NuvioDevice.performTick()
+            NetflixNav.newAndHot.value = newAndHot
+            onTabSelected(tab)
+        }
         val navBarGlowEnabled by ThemeSettingsRepository.navBarGlowEnabled.collectAsStateWithLifecycle()
         val floatingNavigationItems = listOf(
             FloatingNavigationItem(
@@ -94,19 +104,19 @@ internal fun MainTabsDestination(
             ),
             FloatingNavigationItem(
                 selected = selectedTab == AppScreenTab.Search,
-                onClick = { onTabSelected(AppScreenTab.Search) },
+                onClick = { netflixTab(AppScreenTab.Search, false) },
                 drawable = Res.drawable.sidebar_search,
                 label = stringResource(Res.string.compose_nav_search),
             ),
             FloatingNavigationItem(
                 selected = selectedTab == AppScreenTab.Library,
-                onClick = { onTabSelected(AppScreenTab.Library) },
+                onClick = { netflixTab(AppScreenTab.Library, false) },
                 drawable = Res.drawable.sidebar_library,
                 label = stringResource(Res.string.compose_nav_library),
             ),
             FloatingNavigationItem(
                 selected = selectedTab == AppScreenTab.Settings,
-                onClick = { onTabSelected(AppScreenTab.Settings) },
+                onClick = { netflixTab(AppScreenTab.Settings, false) },
                 label = stringResource(Res.string.compose_nav_profile),
                 content = { onClick ->
                     ProfileSwitcherTab(
@@ -133,31 +143,37 @@ internal fun MainTabsDestination(
                 if (netflixBottomBar) {
                     NetflixBottomBar {
                         NetflixBottomBarItem(
-                            selected = selectedTab == AppScreenTab.Home,
+                            selected = selectedTab == AppScreenTab.Home && !netflixNewAndHot,
                             label = stringResource(Res.string.compose_nav_home),
-                            onClick = { onTabSelected(AppScreenTab.Home) },
-                            icon = if (selectedTab == AppScreenTab.Home) Icons.Filled.Home else Icons.Outlined.Home,
+                            onClick = { netflixTab(AppScreenTab.Home, false) },
+                            icon = if (selectedTab == AppScreenTab.Home && !netflixNewAndHot) Icons.Filled.Home else Icons.Outlined.Home,
+                        )
+                        NetflixBottomBarItem(
+                            selected = selectedTab == AppScreenTab.Home && netflixNewAndHot,
+                            label = "New & Hot",
+                            onClick = { netflixTab(AppScreenTab.Home, true) },
+                            icon = if (selectedTab == AppScreenTab.Home && netflixNewAndHot) Icons.Filled.VideoLibrary else Icons.Outlined.VideoLibrary,
                         )
                         NetflixBottomBarItem(
                             selected = selectedTab == AppScreenTab.Search,
                             label = stringResource(Res.string.compose_nav_search),
-                            onClick = { onTabSelected(AppScreenTab.Search) },
+                            onClick = { netflixTab(AppScreenTab.Search, false) },
                             drawable = Res.drawable.sidebar_search,
                         )
                         NetflixBottomBarItem(
                             selected = selectedTab == AppScreenTab.Library,
                             label = "My List",
-                            onClick = { onTabSelected(AppScreenTab.Library) },
+                            onClick = { netflixTab(AppScreenTab.Library, false) },
                             drawable = Res.drawable.sidebar_library,
                         )
                         NetflixBottomBarItem(
                             selected = selectedTab == AppScreenTab.Settings,
                             label = "My Nuvio",
-                            onClick = { onTabSelected(AppScreenTab.Settings) },
+                            onClick = { netflixTab(AppScreenTab.Settings, false) },
                             customIcon = {
                                 ProfileSwitcherTab(
                                     selected = selectedTab == AppScreenTab.Settings,
-                                    onClick = { onTabSelected(AppScreenTab.Settings) },
+                                    onClick = { netflixTab(AppScreenTab.Settings, false) },
                                     onProfileSelected = onProfileSelected,
                                     onAddProfileRequested = onAddProfileRequested,
                                 )
@@ -174,23 +190,23 @@ internal fun MainTabsDestination(
                         )
                         NavItem(
                             selected = selectedTab == AppScreenTab.Search,
-                            onClick = { onTabSelected(AppScreenTab.Search) },
+                            onClick = { netflixTab(AppScreenTab.Search, false) },
                             icon = Res.drawable.sidebar_search,
                             contentDescription = stringResource(Res.string.compose_nav_search),
                         )
                         NavItem(
                             selected = selectedTab == AppScreenTab.Library,
-                            onClick = { onTabSelected(AppScreenTab.Library) },
+                            onClick = { netflixTab(AppScreenTab.Library, false) },
                             icon = Res.drawable.sidebar_library,
                             contentDescription = stringResource(Res.string.compose_nav_library),
                         )
                         NavItem(
                             selected = selectedTab == AppScreenTab.Settings,
-                            onClick = { onTabSelected(AppScreenTab.Settings) },
+                            onClick = { netflixTab(AppScreenTab.Settings, false) },
                         ) {
                             ProfileSwitcherTab(
                                 selected = selectedTab == AppScreenTab.Settings,
-                                onClick = { onTabSelected(AppScreenTab.Settings) },
+                                onClick = { netflixTab(AppScreenTab.Settings, false) },
                                 onProfileSelected = onProfileSelected,
                                 onAddProfileRequested = onAddProfileRequested,
                             )
@@ -222,22 +238,27 @@ internal fun MainTabsDestination(
                         NetflixTopNavItem(
                             label = stringResource(Res.string.compose_nav_search),
                             selected = selectedTab == AppScreenTab.Search,
-                            onClick = { onTabSelected(AppScreenTab.Search) },
+                            onClick = { netflixTab(AppScreenTab.Search, false) },
                         )
                         NetflixTopNavItem(
                             label = stringResource(Res.string.compose_nav_home),
-                            selected = selectedTab == AppScreenTab.Home,
-                            onClick = { onTabSelected(AppScreenTab.Home) },
+                            selected = selectedTab == AppScreenTab.Home && !netflixNewAndHot,
+                            onClick = { netflixTab(AppScreenTab.Home, false) },
+                        )
+                        NetflixTopNavItem(
+                            label = "New & Hot",
+                            selected = selectedTab == AppScreenTab.Home && netflixNewAndHot,
+                            onClick = { netflixTab(AppScreenTab.Home, true) },
                         )
                         NetflixTopNavItem(
                             label = "My List",
                             selected = selectedTab == AppScreenTab.Library,
-                            onClick = { onTabSelected(AppScreenTab.Library) },
+                            onClick = { netflixTab(AppScreenTab.Library, false) },
                         )
                         NetflixTopNavItem(
                             label = "My Nuvio",
                             selected = selectedTab == AppScreenTab.Settings,
-                            onClick = { onTabSelected(AppScreenTab.Settings) },
+                            onClick = { netflixTab(AppScreenTab.Settings, false) },
                         )
                     }
                 } else if (isTabletLayout && !useNativeBottomTabs) {

@@ -248,6 +248,14 @@ fun SearchScreen(
         val homeSectionPadding = remember(maxWidth) {
             homeSectionHorizontalPaddingForWidth(maxWidth.value)
         }
+        val netflixSearch = com.nuvio.app.core.ui.netflixFaceActive()
+        val netflixHomeState by com.nuvio.app.features.home.HomeRepository.uiState.collectAsStateWithLifecycle()
+        val netflixTopSearches = remember(netflixHomeState.sections) {
+            netflixHomeState.sections.take(3).flatMap { it.items.take(6) }
+                .distinctBy { "${it.type}:${it.id}" }
+                .take(12)
+        }
+        val netflixGridColumns = ((maxWidth - 24.dp) / 116.dp).toInt().coerceIn(3, 8)
         val headerTitle = when {
             query.isNotBlank() -> stringResource(Res.string.compose_nav_search)
             discoverInFocus -> stringResource(Res.string.compose_search_discover_title)
@@ -281,7 +289,7 @@ fun SearchScreen(
                             onValueChange = { query = it },
                             placeholder = stringResource(Res.string.compose_search_placeholder),
                             textStyle = MaterialTheme.typography.bodyLarge.copy(textDirection = TextDirection.Content),
-                            shape = RoundedCornerShape(NuvioTokens.Radius.xl),
+                            shape = if (netflixSearch) RoundedCornerShape(4.dp) else RoundedCornerShape(NuvioTokens.Radius.xl),
                             modifier = Modifier
                                 .focusRequester(focusRequester)
                                 .onFocusChanged { isSearchFocused = it.isFocused },
@@ -315,6 +323,13 @@ fun SearchScreen(
                     )
                 }
             }
+                if (netflixSearch && netflixTopSearches.isNotEmpty()) {
+                    netflixTopSearchesSection(
+                        items = netflixTopSearches,
+                        onPosterClick = onPosterClick,
+                        onPosterLongClick = onPosterLongClick,
+                    )
+                }
                 discoverContent(
                     state = discoverUiState,
                     isSourceLoading = addonManifestsLoading,
@@ -381,6 +396,22 @@ fun SearchScreen(
                                 },
                                 modifier = Modifier.padding(horizontal = homeSectionPadding),
                             )
+                        }
+                    }
+
+                    netflixSearch -> {
+                        netflixSearchResultsGrid(
+                            items = uiState.sections.flatMap { it.items }.distinctBy { "${it.type}:${it.id}" },
+                            columns = netflixGridColumns,
+                            onPosterClick = onPosterClick,
+                            onPosterLongClick = onPosterLongClick,
+                        )
+                        if (uiState.isLoading) {
+                            item(key = "search_loading_more") {
+                                HomeSkeletonRow(
+                                    horizontalPadding = homeSectionPadding,
+                                )
+                            }
                         }
                     }
 

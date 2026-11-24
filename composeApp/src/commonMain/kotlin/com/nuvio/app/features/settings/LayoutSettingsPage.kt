@@ -57,6 +57,14 @@ internal fun LazyListScope.layoutSettingsContent(
                     isTablet = isTablet,
                     onCheckedChange = ThemeSettingsRepository::setNetflixFaceEnabled,
                 )
+                val netflixAutoplayPreviews by ThemeSettingsRepository.netflixAutoplayPreviews.collectAsStateWithLifecycle()
+                SettingsSwitchRow(
+                    title = "Autoplay previews",
+                    description = "Play trailers muted on the billboard and title pages, like Netflix. Never on mobile data.",
+                    checked = netflixAutoplayPreviews,
+                    isTablet = isTablet,
+                    onCheckedChange = ThemeSettingsRepository::setNetflixAutoplayPreviews,
+                )
             }
         }
     }

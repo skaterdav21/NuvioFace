@@ -23,6 +23,7 @@ actual object ThemeSettingsStorage {
     private const val NAV_BAR_STYLE_KEY = "nav_bar_style"
     private const val navBarGlowEnabledKey = "nav_bar_glow_enabled"
     private const val netflixFaceEnabledKey = "netflix_face_enabled"
+    private const val netflixAutoplayPreviewsKey = "netflix_autoplay_previews"
     private val profileScopedSyncKeys = listOf(
         selectedThemeKey,
         customThemeColorsKey,
@@ -93,6 +94,15 @@ actual object ThemeSettingsStorage {
 
     actual fun saveNetflixFaceEnabled(enabled: Boolean) {
         preferences?.edit()?.putBoolean(netflixFaceEnabledKey, enabled)?.apply()
+    }
+
+    actual fun loadNetflixAutoplayPreviews(): Boolean? =
+        preferences?.let { prefs ->
+            if (prefs.contains(netflixAutoplayPreviewsKey)) prefs.getBoolean(netflixAutoplayPreviewsKey, true) else null
+        }
+
+    actual fun saveNetflixAutoplayPreviews(enabled: Boolean) {
+        preferences?.edit()?.putBoolean(netflixAutoplayPreviewsKey, enabled)?.apply()
     }
 
     actual fun loadLiquidGlassNativeTabBarEnabled(): Boolean? =

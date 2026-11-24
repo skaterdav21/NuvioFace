@@ -89,6 +89,13 @@ open class MainActivity : AppCompatActivity() {
             packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) ||
                 (getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager)
                     ?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
+        com.nuvio.app.core.ui.NuvioDevice.isMeteredNetwork = {
+            (applicationContext.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager)
+                ?.isActiveNetworkMetered ?: false
+        }
+        com.nuvio.app.core.ui.NuvioDevice.performTick = {
+            window?.decorView?.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+        }
         window.setBackgroundDrawableResource(R.color.nuvio_background)
         pipRemoteActionReceiver = PipRemoteActionReceiver.register(this)
         EpisodeReleaseNotificationPlatform.bindActivity(this)

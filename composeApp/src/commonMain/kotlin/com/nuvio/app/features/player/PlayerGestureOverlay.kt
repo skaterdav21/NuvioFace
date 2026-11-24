@@ -1,5 +1,12 @@
 package com.nuvio.app.features.player
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.LightMode
+import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.Replay10
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
+import androidx.compose.foundation.layout.size
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -118,6 +125,18 @@ private fun PlayerGestureFeedback(
                     ) {
                         // Centered on the bar; unbounded width lets the digits overflow the 6dp
                         // column evenly on both sides so the bar itself never moves.
+                        if (com.nuvio.app.core.ui.netflixFaceActive()) {
+                            androidx.compose.material3.Icon(
+                                imageVector = when (feedback.icon) {
+                                    GestureFeedbackIcon.Brightness -> Icons.Rounded.LightMode
+                                    GestureFeedbackIcon.VolumeMuted -> Icons.AutoMirrored.Rounded.VolumeOff
+                                    else -> Icons.AutoMirrored.Rounded.VolumeUp
+                                },
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.wrapContentWidth(unbounded = true).size(22.dp),
+                            )
+                        } else {
                         Text(
                             text = percent.toString(),
                             color = Color.White,
@@ -129,6 +148,7 @@ private fun PlayerGestureFeedback(
                             softWrap = false,
                             modifier = Modifier.wrapContentWidth(unbounded = true),
                         )
+                        }
                         Spacer(Modifier.height(6.dp))
                         Box(
                             modifier = Modifier
@@ -146,7 +166,10 @@ private fun PlayerGestureFeedback(
                                     .align(Alignment.BottomCenter)
                                     .fillMaxWidth()
                                     .fillMaxHeight(animatedLevel)
-                                    .background(MaterialTheme.themePalette.accentBrush()),
+                                    .then(
+                                        if (com.nuvio.app.core.ui.netflixFaceActive()) Modifier.background(Color.White)
+                                        else Modifier.background(MaterialTheme.themePalette.accentBrush()),
+                                    ),
                             )
                         }
                     }
@@ -158,6 +181,30 @@ private fun PlayerGestureFeedback(
                         stringResource(it, *feedback.secondaryMessageArgs.toTypedArray())
                     } ?: feedback.secondaryMessage
                     val shadow = Shadow(Color.Black.copy(alpha = 0.8f), blurRadius = 8f)
+                    if (com.nuvio.app.core.ui.netflixFaceActive() && feedback.icon != GestureFeedbackIcon.Speed) {
+                        // Netflix: a big circular 10-second arrow on the side you double-tapped.
+                        val forward = feedback.icon == GestureFeedbackIcon.SeekForward
+                        Column(
+                            modifier = Modifier
+                                .align(if (forward) Alignment.CenterEnd else Alignment.CenterStart)
+                                .padding(horizontal = horizontalSafePadding + maxWidth / 8),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            androidx.compose.material3.Icon(
+                                imageVector = if (forward) Icons.Rounded.Forward10 else Icons.Rounded.Replay10,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(64.dp),
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = message,
+                                color = Color.White,
+                                style = MaterialTheme.nuvioTypeScale.bodyMd.copy(fontWeight = FontWeight.SemiBold, shadow = shadow),
+                            )
+                        }
+                        return@BoxWithConstraints
+                    }
                     Row(
                         modifier = Modifier
                             .align(Alignment.TopCenter)

@@ -92,7 +92,11 @@ import com.nuvio.app.core.ui.NetflixRowTitle
 import com.nuvio.app.core.ui.NetflixSans
 import com.nuvio.app.core.ui.NetflixWordmark
 import com.nuvio.app.core.ui.NuvioDevice
+import com.nuvio.app.core.ui.NetflixNav
+import com.nuvio.app.core.ui.PlatformBackHandler
 import com.nuvio.app.core.ui.netflixFocusHighlight
+import com.nuvio.app.core.ui.netflixRemoteKeys
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -183,8 +187,18 @@ internal fun NetflixHomeContent(
     onFolderClick: ((collectionId: String, folderId: String) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    val newAndHot by NetflixNav.newAndHot.collectAsStateWithLifecycle()
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        if (NuvioDevice.isTv || maxWidth >= 768.dp) {
+        if (newAndHot) {
+            PlatformBackHandler(enabled = true) { NetflixNav.newAndHot.value = false }
+            NetflixNewAndHotContent(
+                rows = rows,
+                upcomingItems = upcomingItems,
+                wide = NuvioDevice.isTv || maxWidth >= 768.dp,
+                onPosterClick = onPosterClick,
+                onUpcomingClick = onContinueWatchingClick,
+            )
+        } else if (NuvioDevice.isTv || maxWidth >= 768.dp) {
         NetflixTvHomeContent(
             listState = listState,
             heroItems = heroItems,
@@ -1087,6 +1101,10 @@ private fun NetflixTvHomeContent(
         }?.key
     }
     val hasHero = showHero && (heroItems.isNotEmpty() || heroLoading)
+    val tvTop10Keys = remember(rows, top10Key) {
+        (rows.firstOrNull { it.key == top10Key } as? NetflixHomeRow.Catalog)
+            ?.entries?.take(10)?.map { it.stableKey() }?.toSet().orEmpty()
+    }
 
     // Land focus on the billboard's Play button (or the first card) once there is something to focus.
     LaunchedEffect(hasHero, heroItems.isNotEmpty(), rows.isNotEmpty(), continueWatchingItems.isNotEmpty()) {
@@ -1140,6 +1158,7 @@ private fun NetflixTvHomeContent(
                                 entries = row.entries,
                                 watchedKeys = watchedKeys,
                                 fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
+                                top10Keys = tvTop10Keys,
                                 firstFocus = if (takeFocus) firstFocus else null,
                                 onViewAll = row.onViewAll,
                                 onClick = onPosterClick,
@@ -1174,11 +1193,13 @@ private fun NetflixTvBillboard(
 ) {
     var index by remember(items) { mutableStateOf(0) }
     var hasFocusInside by remember { mutableStateOf(false) }
+    var previewPlaying by remember { mutableStateOf(false) }
     val item = items.getOrNull(index)
 
-    // Netflix rotates the billboard while you browse the rows, and holds still while you're on it.
-    LaunchedEffect(items, hasFocusInside) {
-        if (items.size < 2 || hasFocusInside) return@LaunchedEffect
+    // Netflix rotates the billboard while you browse the rows, and holds still while you're on it
+    // or while its preview is playing.
+    LaunchedEffect(items, hasFocusInside, previewPlaying) {
+        if (items.size < 2 || hasFocusInside || previewPlaying) return@LaunchedEffect
         while (true) {
             delay(10_000)
             index = (index + 1) % items.size
@@ -1205,6 +1226,14 @@ private fun NetflixTvBillboard(
             contentScale = ContentScale.Crop,
             alignment = Alignment.TopCenter,
         )
+        NetflixBillboardPreview(
+            item = item,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .fillMaxWidth(0.78f)
+                .fillMaxHeight(),
+            onPlayingChange = { previewPlaying = it },
+        )
         Box(
             Modifier
                 .fillMaxSize()
@@ -1222,6 +1251,13 @@ private fun NetflixTvBillboard(
                 .fillMaxSize()
                 .background(Brush.verticalGradient(0.6f to Color.Transparent, 1f to Color.Black)),
         )
+        if (previewPlaying) {
+            NetflixMuteButton(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = TvSidePadding, bottom = 28.dp),
+            )
+        }
         Column(
             modifier = Modifier
                 .align(Alignment.CenterStart)
@@ -1345,6 +1381,7 @@ private fun NetflixTvCardRow(
     entries: List<MetaPreview>,
     watchedKeys: Set<String>,
     fullyWatchedSeriesKeys: Set<String>,
+    top10Keys: Set<String> = emptySet(),
     firstFocus: FocusRequester?,
     onViewAll: (() -> Unit)?,
     onClick: ((MetaPreview) -> Unit)?,
@@ -1372,6 +1409,7 @@ private fun NetflixTvCardRow(
                     focusRequester = if (index == 0) firstFocus else null,
                     onClick = { onClick?.invoke(item) },
                     onLongClick = onLongClick?.let { { it(item) } },
+                    top10 = item.stableKey() in top10Keys,
                 )
             }
         }
@@ -1390,6 +1428,7 @@ private fun NetflixTvCard(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)?,
     subtitle: String? = null,
+    top10: Boolean = false,
 ) {
     Column(
         modifier = Modifier
@@ -1398,9 +1437,13 @@ private fun NetflixTvCard(
             .clip(RoundedCornerShape(6.dp))
             .background(NetflixColors.Card)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .netflixRemoteKeys(onClick, onLongClick)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+            if (top10) {
+                NetflixTop10Badge(Modifier.align(Alignment.TopEnd).zIndex(2f))
+            }
             AsyncImage(
                 model = imageUrl,
                 contentDescription = title,
@@ -1547,6 +1590,7 @@ private fun NetflixTvTop10Row(
                             .clip(RoundedCornerShape(4.dp))
                             .background(NetflixColors.Card)
                             .then(if (index == 0 && firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier)
+                            .netflixRemoteKeys({ onClick?.invoke(item) }, onLongClick?.let { { it(item) } })
                             .combinedClickable(
                                 onClick = { onClick?.invoke(item) },
                                 onLongClick = onLongClick?.let { { it(item) } },

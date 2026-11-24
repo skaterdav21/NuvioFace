@@ -8,6 +8,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
@@ -182,7 +187,10 @@ private fun NetflixButton(
             .netflixFocusHighlight(RoundedCornerShape(4.dp), focusedScale = 1.05f)
             .clip(RoundedCornerShape(4.dp))
             .background(background)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = {
+                NuvioDevice.performTick()
+                onClick()
+            })
             .padding(PaddingValues(horizontal = 14.dp)),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
@@ -220,7 +228,10 @@ fun NetflixIconAction(
             .widthIn(min = 64.dp)
             .netflixFocusHighlight(RoundedCornerShape(6.dp))
             .clip(RoundedCornerShape(6.dp))
-            .netflixCombinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .netflixCombinedClickable(onClick = {
+                NuvioDevice.performTick()
+                onClick()
+            }, onLongClick = onLongClick)
             .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -279,6 +290,12 @@ private fun Modifier.fillMaxWidthFraction(fraction: Float): Modifier = this.fill
 /** Set once at startup by the Android activity: true on Android TV / Google TV boxes. */
 object NuvioDevice {
     var isTv: Boolean = false
+
+    /** Set by the Android activity: true on mobile data / metered Wi-Fi. */
+    var isMeteredNetwork: () -> Boolean = { false }
+
+    /** Set by the Android activity: short haptic tick for Netflix-style buttons. */
+    var performTick: () -> Unit = {}
 }
 
 /** Netflix face on a TV: remote-driven layouts with focus highlights. */
@@ -310,4 +327,47 @@ fun Modifier.netflixFocusHighlight(
         }
         .then(if (focused) Modifier.border(borderWidth, Color.White, shape) else Modifier)
         .onFocusChanged { focused = it.hasFocus }
+}
+
+/** Netflix face navigation state shared by the tab bar and Home (New & Hot lives inside Home). */
+object NetflixNav {
+    val newAndHot = kotlinx.coroutines.flow.MutableStateFlow(false)
+}
+
+
+/**
+ * TV remotes: holding OK (or pressing Menu) on a card opens its long-press menu, like the phone.
+ * A short press still clicks. No effect on phones.
+ */
+@Composable
+fun Modifier.netflixRemoteKeys(onClick: () -> Unit, onLongClick: (() -> Unit)?): Modifier {
+    if (!NuvioDevice.isTv || onLongClick == null) return this
+    var downCount by remember { mutableStateOf(0) }
+    var longFired by remember { mutableStateOf(false) }
+    return this.onPreviewKeyEvent { event ->
+        if (event.key == Key.Menu) {
+            if (event.type == KeyEventType.KeyDown) onLongClick()
+            return@onPreviewKeyEvent true
+        }
+        val ok = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+        if (!ok) return@onPreviewKeyEvent false
+        when (event.type) {
+            KeyEventType.KeyDown -> {
+                downCount += 1
+                if (downCount >= 3 && !longFired) {
+                    longFired = true
+                    NuvioDevice.performTick()
+                    onLongClick()
+                }
+                true
+            }
+            KeyEventType.KeyUp -> {
+                if (!longFired && downCount > 0) onClick()
+                downCount = 0
+                longFired = false
+                true
+            }
+            else -> false
+        }
+    }
 }

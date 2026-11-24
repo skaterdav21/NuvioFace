@@ -225,8 +225,16 @@ fun MetaDetailsScreen(
         MetaScreenSettingsRepository.uiState
     }.collectAsStateWithLifecycle()
     val netflixFaceDetails = netflixFaceActive()
-    val metaScreenSettingsUiState = remember(rawMetaScreenSettingsUiState, netflixFaceDetails) {
-        if (netflixFaceDetails) rawMetaScreenSettingsUiState.withNetflixTabs() else rawMetaScreenSettingsUiState
+    val netflixAutoplayPreviews by com.nuvio.app.features.settings.ThemeSettingsRepository.netflixAutoplayPreviews.collectAsStateWithLifecycle()
+    val netflixPreviewsAllowed = netflixFaceDetails && netflixAutoplayPreviews && !com.nuvio.app.core.ui.NuvioDevice.isMeteredNetwork()
+    val metaScreenSettingsUiState = remember(rawMetaScreenSettingsUiState, netflixFaceDetails, netflixPreviewsAllowed) {
+        if (netflixFaceDetails) {
+            rawMetaScreenSettingsUiState.withNetflixTabs().let { tabbed ->
+                if (netflixPreviewsAllowed) tabbed.copy(heroTrailerPlayback = true) else tabbed
+            }
+        } else {
+            rawMetaScreenSettingsUiState
+        }
     }
     val mdbListSettings by remember {
         MdbListSettingsRepository.ensureLoaded()

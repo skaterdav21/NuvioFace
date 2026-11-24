@@ -20,6 +20,8 @@ internal expect object ThemeSettingsStorage {
     fun saveNavBarGlowEnabled(enabled: Boolean)
     fun loadNetflixFaceEnabled(): Boolean?
     fun saveNetflixFaceEnabled(enabled: Boolean)
+    fun loadNetflixAutoplayPreviews(): Boolean?
+    fun saveNetflixAutoplayPreviews(enabled: Boolean)
     fun exportToSyncPayload(): JsonObject
     fun replaceFromSyncPayload(payload: JsonObject)
 }

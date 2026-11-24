@@ -47,6 +47,10 @@ object ThemeSettingsRepository {
     /** Dave's Netflix-style face: home, details, player and tab bar. On by default. */
     val netflixFaceEnabled: StateFlow<Boolean> = _netflixFaceEnabled.asStateFlow()
 
+    private val _netflixAutoplayPreviews = MutableStateFlow(true)
+    /** Netflix face: muted trailer previews in the billboard and details header (never on mobile data). */
+    val netflixAutoplayPreviews: StateFlow<Boolean> = _netflixAutoplayPreviews.asStateFlow()
+
     private var hasLoaded = false
     private var observesMembership = false
 
@@ -100,6 +104,14 @@ object ThemeSettingsRepository {
         _navBarGlowEnabled.value = ThemeSettingsStorage.loadNavBarGlowEnabled() ?: true
         _navBarStyle.value = NavBarStyle.fromKey(ThemeSettingsStorage.loadNavBarStyle())
         _netflixFaceEnabled.value = ThemeSettingsStorage.loadNetflixFaceEnabled() ?: true
+        _netflixAutoplayPreviews.value = ThemeSettingsStorage.loadNetflixAutoplayPreviews() ?: true
+    }
+
+    fun setNetflixAutoplayPreviews(enabled: Boolean) {
+        ensureLoaded()
+        if (_netflixAutoplayPreviews.value == enabled) return
+        _netflixAutoplayPreviews.value = enabled
+        ThemeSettingsStorage.saveNetflixAutoplayPreviews(enabled)
     }
 
     fun setNetflixFaceEnabled(enabled: Boolean) {
