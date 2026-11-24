@@ -29,7 +29,23 @@ import java.util.regex.Pattern;
 /** Talks to GitHub Releases and Android's package installer. No UI here. */
 final class Updater {
     static final String REPO = "skaterdav21/NuvioFace";
-    static final String FACE_PACKAGE = "com.dave.nuvioface";
+    static final String PHONE_PACKAGE = "com.dave.nuvioface";
+    static final String TV_PACKAGE = "com.dave.nuviofacetv";
+
+    /** TV boxes get Nuvio Face TV (built on NuvioTV); phones and tablets get Nuvio Face. */
+    static boolean isTv(Context context) {
+        PackageManager pm = context.getPackageManager();
+        return pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+                || pm.hasSystemFeature("android.software.leanback_only");
+    }
+
+    static String facePackage(Context context) {
+        return isTv(context) ? TV_PACKAGE : PHONE_PACKAGE;
+    }
+
+    static String appLabel(Context context) {
+        return isTv(context) ? "Nuvio Face TV" : "Nuvio Face";
+    }
 
     private Updater() {}
 
@@ -54,7 +70,8 @@ final class Updater {
         return (has64 && Process.is64Bit()) ? "arm64" : "arm32";
     }
 
-    static Release fetchLatest() throws IOException {
+    static Release fetchLatest(Context context) throws IOException {
+        boolean tv = isTv(context);
         HttpURLConnection conn = (HttpURLConnection) new URL(
                 "https://api.github.com/repos/" + REPO + "/releases/latest").openConnection();
         conn.setRequestProperty("Accept", "application/vnd.github+json");
@@ -70,17 +87,20 @@ final class Updater {
             r.tag = json.optString("tag_name");
             r.title = json.optString("name", r.tag);
             r.notes = json.optString("body", "");
-            Matcher vc = Pattern.compile("versionCode:\\s*(\\d+)").matcher(r.notes);
+            String codeKey = tv ? "tvVersionCode" : "versionCode";
+            String nameKey = tv ? "tvVersionName" : "versionName";
+            Matcher vc = Pattern.compile("(?m)^" + codeKey + ":\\s*(\\d+)").matcher(r.notes);
             if (vc.find()) r.versionCode = Long.parseLong(vc.group(1));
-            Matcher vn = Pattern.compile("versionName:\\s*(\\S+)").matcher(r.notes);
+            Matcher vn = Pattern.compile("(?m)^" + nameKey + ":\\s*(\\S+)").matcher(r.notes);
             if (vn.find()) r.versionName = vn.group(1);
+            String prefix = tv ? "NuvioFaceTV-" : "NuvioFace-";
             String flavor = abiFlavor();
             JSONArray assets = json.optJSONArray("assets");
             if (assets != null) {
                 for (int i = 0; i < assets.length(); i++) {
                     JSONObject a = assets.getJSONObject(i);
                     String name = a.optString("name");
-                    if (name.startsWith("NuvioFace-") && name.contains(flavor) && name.endsWith(".apk")) {
+                    if (name.startsWith(prefix) && name.contains(flavor) && name.endsWith(".apk")) {
                         r.assetName = name;
                         r.assetUrl = a.optString("browser_download_url");
                         r.assetSize = a.optLong("size");
@@ -101,7 +121,7 @@ final class Updater {
     @SuppressWarnings("deprecation")
     static long installedVersionCode(Context context) {
         try {
-            PackageInfo info = context.getPackageManager().getPackageInfo(FACE_PACKAGE, 0);
+            PackageInfo info = context.getPackageManager().getPackageInfo(facePackage(context), 0);
             return Build.VERSION.SDK_INT >= 28 ? info.getLongVersionCode() : info.versionCode;
         } catch (PackageManager.NameNotFoundException e) {
             return -1;
@@ -110,7 +130,7 @@ final class Updater {
 
     static String installedVersionName(Context context) {
         try {
-            return context.getPackageManager().getPackageInfo(FACE_PACKAGE, 0).versionName;
+            return context.getPackageManager().getPackageInfo(facePackage(context), 0).versionName;
         } catch (PackageManager.NameNotFoundException e) {
             return null;
         }
@@ -166,7 +186,7 @@ final class Updater {
         PackageInstaller installer = context.getPackageManager().getPackageInstaller();
         PackageInstaller.SessionParams params =
                 new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-        params.setAppPackageName(FACE_PACKAGE);
+        params.setAppPackageName(facePackage(context));
         if (Build.VERSION.SDK_INT >= 31) {
             params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
         }

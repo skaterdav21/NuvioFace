@@ -1,15 +1,20 @@
 # Nuvio Face
 
-A Netflix-style face for [Nuvio](https://github.com/NuvioMedia/NuvioMobile), for phones, tablets and Android TV.
+A Netflix-style face for Nuvio:
+
+- **Nuvio Face** (`com.dave.nuvioface`): phones and tablets, built on [NuvioMobile](https://github.com/NuvioMedia/NuvioMobile).
+- **Nuvio Face TV** (`com.dave.nuviofacetv`): Android TV / Google TV, built on Nuvio's official TV app
+  [NuvioTV](https://github.com/NuvioMedia/NuvioTV), so it's made for remotes and slow boxes.
+
 Same Nuvio underneath (addons, debrid, sync, Trakt, profiles, watch party, Android Auto); only the look changes.
 
 ## How it stays current
 
 Every day at 3:23 AM Pacific, GitHub Actions:
 
-1. finds the latest official Nuvio release tag,
-2. applies `patches/nuvio-face.patch` on top of it (overlapping additions are kept from both sides),
-3. builds the phone/Shield APK (arm64), the Chromecast/onn APK (arm32) and the updater,
+1. finds the latest official NuvioMobile and NuvioTV release tags,
+2. applies `patches/nuvio-face.patch` and `patches/nuvio-face-tv.patch` (overlapping additions are kept from both sides),
+3. builds the phone APK, the TV APKs (arm64 for Shield, arm32 for Chromecast with Google TV / onn) and the updater,
 4. publishes them as a [Release](../../releases/latest).
 
 If nothing changed upstream, it does nothing. If Nuvio changed something the patch can't fit around, the
@@ -19,7 +24,8 @@ Run it by hand: **Actions > Nuvio Face > Run workflow** (optionally pick an offi
 
 ## Install
 
-Install **NuvioFaceUpdater.apk** from the latest release once (phone and each TV box). It shows the installed
+Install **NuvioFaceUpdater.apk** from the latest release once on each device. On a TV box it installs Nuvio Face TV,
+on a phone Nuvio Face. It shows the installed
 and latest version, downloads the right APK for the device, installs it, and can check daily and notify you.
 
 ## Signing
@@ -30,7 +36,8 @@ next build can only be installed after uninstalling.
 
 ## Changing the face
 
-The full source is on the `source` branch. After changing it, regenerate the patch against the official base:
+The phone source is on the `source` branch; the TV source is official NuvioTV at `patches/BASE-TV` plus
+`patches/nuvio-face-tv.patch`. After changing it, regenerate the patch against the official base:
 
     git diff --binary --full-index <official-base-commit> <source-commit> -- . ':(exclude).github' > patches/nuvio-face.patch
 

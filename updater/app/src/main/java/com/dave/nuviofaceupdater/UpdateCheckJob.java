@@ -41,7 +41,7 @@ public class UpdateCheckJob extends JobService {
     public boolean onStartJob(JobParameters params) {
         new Thread(() -> {
             try {
-                Updater.Release release = Updater.fetchLatest();
+                Updater.Release release = Updater.fetchLatest(this);
                 long installed = Updater.installedVersionCode(this);
                 SharedPreferences prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
                 if (installed >= 0 && Updater.isNewer(release, installed)
@@ -72,7 +72,7 @@ public class UpdateCheckJob extends JobService {
         PendingIntent tap = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CHANNEL) : new Notification.Builder(this);
         b.setSmallIcon(android.R.drawable.stat_sys_download_done)
-                .setContentTitle("Nuvio Face update ready")
+                .setContentTitle(Updater.appLabel(this) + " update ready")
                 .setContentText(release.title + ": tap to install")
                 .setContentIntent(tap)
                 .setAutoCancel(true);

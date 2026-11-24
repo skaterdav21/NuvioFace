@@ -118,9 +118,9 @@ public class MainActivity extends Activity implements InstallReceiver.Listener {
         updateButton.setOnClickListener(v -> onUpdate());
         checkButton = button("Check again", false);
         checkButton.setOnClickListener(v -> checkNow());
-        openButton = button("Open Nuvio Face", false);
+        openButton = button("Open " + Updater.appLabel(this), false);
         openButton.setOnClickListener(v -> openFace());
-        uninstallButton = button("Uninstall current Nuvio Face", false);
+        uninstallButton = button("Uninstall current " + Updater.appLabel(this), false);
         uninstallButton.setVisibility(View.GONE);
         uninstallButton.setOnClickListener(v -> uninstallFace());
 
@@ -206,7 +206,7 @@ public class MainActivity extends Activity implements InstallReceiver.Listener {
 
     private void refreshInstalled() {
         String name = Updater.installedVersionName(this);
-        installedText.setText(name == null ? "Installed: not installed" : "Installed: " + name);
+        installedText.setText(Updater.appLabel(this) + (name == null ? ": not installed" : ": " + name));
         openButton.setVisibility(name == null ? View.GONE : View.VISIBLE);
         updateButtonState();
     }
@@ -218,7 +218,7 @@ public class MainActivity extends Activity implements InstallReceiver.Listener {
             updateButton.setText("Update");
         } else if (installed < 0) {
             updateButton.setEnabled(!busy);
-            updateButton.setText("Install Nuvio Face");
+            updateButton.setText("Install " + Updater.appLabel(this));
         } else if (Updater.isNewer(latest, installed)) {
             updateButton.setEnabled(!busy);
             updateButton.setText("Update to " + shortName(latest));
@@ -241,11 +241,11 @@ public class MainActivity extends Activity implements InstallReceiver.Listener {
         if (busy) return;
         busy = true;
         refreshInstalled();
-        setStatus("Checking GitHub for the latest Nuvio Face…");
+        setStatus("Checking GitHub for the latest " + Updater.appLabel(this) + "…");
         latestText.setText("Latest: …");
         worker.execute(() -> {
             try {
-                Updater.Release r = Updater.fetchLatest();
+                Updater.Release r = Updater.fetchLatest(this);
                 main.post(() -> {
                     busy = false;
                     latest = r;
@@ -316,7 +316,7 @@ public class MainActivity extends Activity implements InstallReceiver.Listener {
             busy = false;
             progress.setVisibility(View.GONE);
             if (status == PackageInstaller.STATUS_SUCCESS) {
-                setStatus("Nuvio Face is up to date.");
+                setStatus(Updater.appLabel(this) + " is up to date.");
             } else if (status == PackageInstaller.STATUS_FAILURE_CONFLICT
                     || status == PackageInstaller.STATUS_FAILURE_INCOMPATIBLE) {
                 setStatus("This build is signed with a different key than the Nuvio Face on this device. "
@@ -333,13 +333,13 @@ public class MainActivity extends Activity implements InstallReceiver.Listener {
     }
 
     private void openFace() {
-        Intent launch = getPackageManager().getLaunchIntentForPackage(Updater.FACE_PACKAGE);
-        if (launch == null) launch = getPackageManager().getLeanbackLaunchIntentForPackage(Updater.FACE_PACKAGE);
+        Intent launch = getPackageManager().getLaunchIntentForPackage(Updater.facePackage(this));
+        if (launch == null) launch = getPackageManager().getLeanbackLaunchIntentForPackage(Updater.facePackage(this));
         if (launch != null) startActivity(launch);
     }
 
     @SuppressWarnings("deprecation")
     private void uninstallFace() {
-        startActivity(new Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:" + Updater.FACE_PACKAGE)));
+        startActivity(new Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:" + Updater.facePackage(this))));
     }
 }
