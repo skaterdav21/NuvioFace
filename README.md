@@ -1,94 +1,37 @@
-## This fork: Nuvio Auto
+# Nuvio Face
 
-The full Nuvio app on the **Android Auto** screen, built the way [YT Auto](https://github.com/begati/yt-auto) works.
-It installs next to the official app as `com.dave.nuvioauto` ("Nuvio Auto" on the phone, "Nuvio" in the car).
+A Netflix-style face for [Nuvio](https://github.com/NuvioMedia/NuvioMobile), for phones, tablets and Android TV.
+Same Nuvio underneath (addons, debrid, sync, Trakt, profiles, watch party, Android Auto); only the look changes.
 
-**How it works.** Two entry points, like YT Auto: a projection service on the unofficial Android Auto SDK
-(`LegacyCarService`, real touches) and a Car App Library navigation app (`NuvioCarAppService`), since Android Auto
-only gives a drawing surface to navigation apps. Both use `CarDisplayHost`, which puts a private virtual display on the car surface and shows the whole Nuvio UI on it in a
-Presentation window (`CarNuvioWindow`), like YT Auto does with YouTube: same UI, account, addons and player.
-(Android 15+ won't start even an app's own activity on a virtual display it made, so no activity is used.) Car taps, drags and flings are replayed as finger
-touches. Code: `androidApp/src/main/kotlin/com/nuvio/app/car/`.
+## How it stays current
 
-**Get the APK.** Actions > **Nuvio Auto** > latest run > download `NuvioAuto-<n>-arm64.apk`.
-Every push to `android-auto` builds one. Set the `NUVIO_AUTO_KEYSTORE_B64` secret so builds install over each other.
+Every day at 3:23 AM Pacific, GitHub Actions:
 
-**Install.**
-1. Install the APK normally. Android Auto settings: tap **Version** 10 times, then ⋮ > **Developer settings** >
-   **Unknown sources**. Restart the phone (or force-stop Android Auto).
-2. Android Auto settings > **Customize launcher**: tick **Nuvio**.
-3. Still missing? Reinstall with [KingInstaller](https://github.com/fcaronte/KingInstaller/releases)
-   ("Install as King"), so Android Auto treats it as a Play Store app.
-4. Open **Nuvio Auto** on the phone once and sign in. Open **Nuvio Auto Setup** for screen size and the
-   driving video lock.
+1. finds the latest official Nuvio release tag,
+2. applies `patches/nuvio-face.patch` on top of it (overlapping additions are kept from both sides),
+3. builds the phone/Shield APK (arm64), the Chromecast/onn APK (arm32) and the updater,
+4. publishes them as a [Release](../../releases/latest).
 
-**Setup.** Every in-car extra has its own switch in Nuvio Auto Setup, plus Basic mode (all extras off at once),
-reset, and a shareable car log. Extras: car profile and car lock, continue-watching prompt, fill-screen video,
-bigger buffer, auto-skip intros, auto next episode, subtitle size and background, steering wheel mapping,
-pause on disconnect, data saver, audio-only and next-episode buttons, Downloads shortcut, button bar position
-and timeout, phone remote with Quick Settings tile.
+If nothing changed upstream, it does nothing. If Nuvio changed something the patch can't fit around, the
+build fails and GitHub emails you; nothing broken gets published.
 
-**Extras.** Car keyboard search with recent searches; buttons that switch to playback controls while watching;
-"Continue watching?" when the car connects; a phone remote for passengers (notification while connected);
-data saver that puts 720p-or-lower streams first on mobile data. All toggles are in Nuvio Auto Setup.
+Run it by hand: **Actions > Nuvio Face > Run workflow** (optionally pick an official tag, branch or commit).
 
-**In the car.** Tap to select, drag to scroll (drags start from the middle of the screen). Buttons: Back,
-Keyboard (tap Nuvio's search box first), Home, Screen size. Video is covered while the phone's GPS says you're
-moving, unless you turn that off in Setup. Only watch while parked.
+## Install
 
-<div align="center">
+Install **NuvioFaceUpdater.apk** from the latest release once (phone and each TV box). It shows the installed
+and latest version, downloads the right APK for the device, installs it, and can check daily and notify you.
 
-  <img src="https://nuvio.tv/assets/nuvio-app-logo-wordmark.webp" alt="Nuvio" width="320" />
+## Signing
 
-  <p>
-    A free, open-source media app for your phone, your desktop, and the TV you already own.
-    <br />
-    Bring your own sources. Nuvio turns them into a library with artwork, ratings, subtitles, and your place saved on every screen.
-  </p>
+Add the secret `NUVIO_FACE_KEYSTORE_B64` (PKCS12, password and alias `nuvioface`) so every build is signed
+with the same key and installs over the previous one. Keep a copy of the key somewhere safe: lose it and the
+next build can only be installed after uninstalling.
 
-  [Website](https://nuvio.tv) · [GitHub releases](https://github.com/NuvioMedia/NuvioMobile/releases/latest) · [Support Nuvio](https://nuvio.tv/support)
+## Changing the face
 
-</div>
+The full source is on the `source` branch. After changing it, regenerate the patch against the official base:
 
-## Get Nuvio Mobile
+    git diff --binary --full-index <official-base-commit> <source-commit> -- . ':(exclude).github' > patches/nuvio-face.patch
 
-- [Android on Google Play](https://play.google.com/store/apps/details?id=com.nuvio.app)
-- [Android APK](https://github.com/NuvioMedia/NuvioMobile/releases/latest)
-- iOS via AltStore or SideStore: add [this source URL](https://raw.githubusercontent.com/NuvioMedia/NuvioMobile/cmp-rewrite/store.json) in the app's Sources section, then install Nuvio.
-- iOS beta builds: add [the beta source URL](https://raw.githubusercontent.com/NuvioMedia/NuvioMobile/cmp-rewrite/store-beta.json) instead to get pre-releases as well.
-
-## Build from source
-
-```bash
-git clone https://github.com/NuvioMedia/NuvioMobile.git
-cd NuvioMobile
-```
-
-### Android
-
-Android development requires Android Studio and the Android SDK.
-
-```bash
-./gradlew :androidApp:assembleFullDebug
-```
-
-### iOS
-
-iOS development requires macOS and Xcode.
-
-```bash
-env NUVIO_IOS_DISTRIBUTION=full xcodebuild \
-  -project iosApp/iosApp.xcodeproj \
-  -scheme iosApp \
-  -configuration Debug \
-  -sdk iphonesimulator \
-  -derivedDataPath build/ios-derived-full-simulator \
-  CODE_SIGNING_ALLOWED=NO \
-  build
-```
-
-The shared app is built with Kotlin Multiplatform and Compose Multiplatform.
-
-## License
-
-[GNU General Public License v3.0](./LICENSE)
+`patches/BASE` records the official commit the patch was made from.

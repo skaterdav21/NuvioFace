@@ -1,0 +1,236 @@
+name: Nuvio Face
+# Every day: take the latest official Nuvio release, apply the Nuvio Face patch, build the phone
+# and TV APKs plus the updater, and publish them as a GitHub Release. Skips if that release exists.
+#
+# Secrets (Settings > Secrets and variables > Actions):
+#   NUVIO_FACE_KEYSTORE_B64   signing key (base64 PKCS12, password "nuvioface", alias "nuvioface").
+#                             Without it every build gets a throwaway key and can't update over the last.
+#   NUVIO_AUTO_KEYSTORE_B64   used instead if NUVIO_FACE_KEYSTORE_B64 is missing (password/alias "nuvioauto").
+#   TMDB_API_KEY, TRAKT_CLIENT_ID, ... optional, same as Nuvio's own build.
+
+on:
+  schedule:
+    - cron: "23 11 * * *"   # 3:23 AM Pacific
+  push:
+    branches: [main]
+    paths:
+      - "patches/**"
+      - "scripts/**"
+      - "updater/**"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Official Nuvio tag, branch or commit (blank = latest release)"
+        required: false
+        default: ""
+      force:
+        description: "Build even if this release already exists"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nuvio-face
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: https://github.com/NuvioMedia/NuvioMobile.git
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout Nuvio Face
+        uses: actions/checkout@v6
+        with:
+          path: face
+
+      - name: Pick the official Nuvio version
+        id: pick
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_REF: ${{ github.event.inputs.upstream_ref }}
+          INPUT_FORCE: ${{ github.event.inputs.force }}
+        run: |
+          git clone --filter=blob:none --no-checkout "$UPSTREAM" upstream
+          cd upstream
+          if [ -n "$INPUT_REF" ]; then
+            ref="$INPUT_REF"
+          else
+            ref=$(git -c versionsort.suffix=-alpha -c versionsort.suffix=-beta -c versionsort.suffix=-rc \
+              tag --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+' | grep -v '^v0\.' | head -n1)
+          fi
+          [ -n "$ref" ] || { echo "::error::No Nuvio release tag found"; exit 1; }
+          sha=$(git rev-parse "${ref}^{commit}" 2>/dev/null || git rev-parse "origin/${ref}^{commit}")
+          patch_hash=$(cat ../face/patches/*.patch | sha256sum | cut -c1-8)
+          tag="face-${ref}-p${patch_hash}"
+          echo "Official Nuvio: $ref ($sha)  patch: $patch_hash  release: $tag"
+          {
+            echo "ref=$ref"
+            echo "sha=$sha"
+            echo "patch_hash=$patch_hash"
+            echo "tag=$tag"
+          } >> "$GITHUB_OUTPUT"
+          skip=false
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 && [ "$INPUT_FORCE" != "true" ]; then
+            if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              skip=true
+            fi
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+          [ "$skip" = true ] && echo "Already built $tag, nothing new upstream." || true
+
+      - name: Apply the Nuvio Face patch
+        if: steps.pick.outputs.skip != 'true'
+        shell: bash
+        working-directory: upstream
+        run: |
+          git -c advice.detachedHead=false checkout -q "${{ steps.pick.outputs.sha }}"
+          git config user.name "Nuvio Face CI"
+          git config user.email "ci@nuvioface.invalid"
+          ../face/scripts/apply-patch.sh ../face/patches/nuvio-face.patch
+
+      - name: Set up Java
+        if: steps.pick.outputs.skip != 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        if: steps.pick.outputs.skip != 'true'
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Properties, version and signing key
+        if: steps.pick.outputs.skip != 'true'
+        shell: bash
+        working-directory: upstream
+        env:
+          NUVIO_FACE_KEYSTORE_B64: ${{ secrets.NUVIO_FACE_KEYSTORE_B64 }}
+          NUVIO_AUTO_KEYSTORE_B64: ${{ secrets.NUVIO_AUTO_KEYSTORE_B64 }}
+          NUVIO_SUPABASE_URL: ${{ secrets.NUVIO_SUPABASE_URL }}
+          NUVIO_SUPABASE_ANON_KEY: ${{ secrets.NUVIO_SUPABASE_ANON_KEY }}
+          NUVIO_SUPABASE_FALLBACK_URL: ${{ secrets.NUVIO_SUPABASE_FALLBACK_URL }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          TRAKT_CLIENT_ID: ${{ secrets.TRAKT_CLIENT_ID }}
+          TRAKT_CLIENT_SECRET: ${{ secrets.TRAKT_CLIENT_SECRET }}
+          SIMKL_CLIENT_ID: ${{ secrets.SIMKL_CLIENT_ID }}
+          MDBLIST_CLIENT_ID: ${{ secrets.MDBLIST_CLIENT_ID }}
+          PREMIUMIZE_CLIENT_ID: ${{ secrets.PREMIUMIZE_CLIENT_ID }}
+          INTRODB_API_URL: ${{ secrets.INTRODB_API_URL }}
+          IMDB_RATINGS_API_BASE_URL: ${{ secrets.IMDB_RATINGS_API_BASE_URL }}
+          IMDB_TAPFRAME_API_BASE_URL: ${{ secrets.IMDB_TAPFRAME_API_BASE_URL }}
+        run: |
+          : > local.properties
+          for name in NUVIO_SUPABASE_URL NUVIO_SUPABASE_ANON_KEY NUVIO_SUPABASE_FALLBACK_URL TMDB_API_KEY \
+            TRAKT_CLIENT_ID TRAKT_CLIENT_SECRET SIMKL_CLIENT_ID MDBLIST_CLIENT_ID PREMIUMIZE_CLIENT_ID \
+            INTRODB_API_URL IMDB_RATINGS_API_BASE_URL IMDB_TAPFRAME_API_BASE_URL; do
+            value="${!name}"
+            [ -n "$value" ] && printf '%s=%s\n' "$name" "$value" >> local.properties
+          done
+          if [ -z "$NUVIO_SUPABASE_URL" ] || [ -z "$NUVIO_SUPABASE_ANON_KEY" ]; then
+            sed -i '/^NUVIO_SUPABASE_URL=/d;/^NUVIO_SUPABASE_ANON_KEY=/d' local.properties
+            printf 'NUVIO_SUPABASE_URL=%s\n' "https://api.nuvio.tv" >> local.properties
+            printf 'NUVIO_SUPABASE_ANON_KEY=%s\n' "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzgxNTIxMzQ2LCJleHAiOjE5MzkyMDEzNDZ9.tmQaj682pwzehpqlgCDMnySOqiUvpgRbrE43T4VJpDI" >> local.properties
+          fi
+
+          keystore="$RUNNER_TEMP/nuvio-face.jks"
+          if [ -n "$NUVIO_FACE_KEYSTORE_B64" ]; then
+            printf '%s' "$NUVIO_FACE_KEYSTORE_B64" | base64 --decode > "$keystore"; pass=nuvioface; alias=nuvioface
+          elif [ -n "$NUVIO_AUTO_KEYSTORE_B64" ]; then
+            printf '%s' "$NUVIO_AUTO_KEYSTORE_B64" | base64 --decode > "$keystore"; pass=nuvioauto; alias=nuvioauto
+          else
+            echo "::warning::No signing key secret: this build has a one-off key and won't update over the last one."
+            pass=nuvioface; alias=nuvioface
+            keytool -genkeypair -keystore "$keystore" -storetype PKCS12 -storepass $pass -keypass $pass \
+              -alias $alias -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Nuvio Face"
+          fi
+          {
+            printf 'NUVIO_RELEASE_STORE_FILE=%s\n' "$keystore"
+            printf 'NUVIO_RELEASE_STORE_PASSWORD=%s\n' "$pass"
+            printf 'NUVIO_RELEASE_KEY_ALIAS=%s\n' "$alias"
+            printf 'NUVIO_RELEASE_KEY_PASSWORD=%s\n' "$pass"
+          } >> local.properties
+          {
+            echo "KEYSTORE=$keystore"
+            echo "KEYPASS=$pass"
+            echo "KEYALIAS=$alias"
+          } >> "$GITHUB_ENV"
+
+          # Version: official Nuvio version + face build number. The code always goes up.
+          vfile=iosApp/Configuration/Version.xcconfig
+          up_name=$(grep -E '^MARKETING_VERSION=' "$vfile" | cut -d= -f2 | tr -d ' ')
+          up_code=$(grep -E '^CURRENT_PROJECT_VERSION=' "$vfile" | cut -d= -f2 | tr -d ' ')
+          face_name="${up_name}-face.${GITHUB_RUN_NUMBER}"
+          face_code=$(( up_code * 10000 + GITHUB_RUN_NUMBER ))
+          sed -i "s/^MARKETING_VERSION=.*/MARKETING_VERSION=${face_name}/" "$vfile"
+          sed -i "s/^CURRENT_PROJECT_VERSION=.*/CURRENT_PROJECT_VERSION=${face_code}/" "$vfile"
+          echo "FACE_NAME=$face_name" >> "$GITHUB_ENV"
+          echo "FACE_CODE=$face_code" >> "$GITHUB_ENV"
+          echo "Nuvio Face $face_name ($face_code)"
+
+          # Its own app, next to Nuvio and Nuvio Auto.
+          f=androidApp/src/main/res/values/car_strings.xml
+          sed -i 's|<string name="app_name">Nuvio Auto</string>|<string name="app_name">Nuvio Face</string>|' "$f"
+          sed -i 's|<string name="car_app_label">Nuvio</string>|<string name="car_app_label">Nuvio Face</string>|' "$f"
+          sed -i 's|<string name="car_setup_label">Nuvio Auto Setup</string>|<string name="car_setup_label">Nuvio Face Setup</string>|' "$f"
+
+          sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx8g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8/' gradle.properties
+          sed -i 's/^kotlin.daemon.jvmargs=.*/kotlin.daemon.jvmargs=-Xmx3g/' gradle.properties
+
+      - name: Build Nuvio Face
+        if: steps.pick.outputs.skip != 'true'
+        working-directory: upstream
+        run: >
+          ./gradlew :androidApp:assembleFullRelease
+          -Pnuvio.android.distribution=full
+          -Pnuvio.ios.distribution=appstore
+          -Pnuvio.applicationId=com.dave.nuvioface
+          --stacktrace
+
+      - name: Build the updater
+        if: steps.pick.outputs.skip != 'true'
+        working-directory: face/updater
+        run: >
+          ./gradlew --no-daemon :app:assembleRelease
+          -Pupdater.versionCode=${{ github.run_number }}
+          -Pupdater.versionName=1.${{ github.run_number }}
+          -Pupdater.storeFile=${{ env.KEYSTORE }}
+          -Pupdater.storePassword=${{ env.KEYPASS }}
+          -Pupdater.keyAlias=${{ env.KEYALIAS }}
+
+      - name: Publish release
+        if: steps.pick.outputs.skip != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p out
+          apks=upstream/androidApp/build/outputs/apk/full/release
+          ls -la "$apks"
+          cp "$(ls $apks/*arm64-v8a*.apk | head -n1)" "out/NuvioFace-${FACE_NAME}-arm64.apk"
+          cp "$(ls $apks/*armeabi-v7a*.apk | head -n1)" "out/NuvioFace-${FACE_NAME}-arm32.apk"
+          cp "$(ls face/updater/app/build/outputs/apk/release/*.apk | head -n1)" "out/NuvioFaceUpdater.apk"
+          ls -la out
+          tag="${{ steps.pick.outputs.tag }}"
+          if gh release view "$tag" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            tag="${tag}-r${GITHUB_RUN_NUMBER}"
+          fi
+          cat > notes.md <<NOTES
+          Nuvio Face on official Nuvio **${{ steps.pick.outputs.ref }}** (\`${{ steps.pick.outputs.sha }}\`), patch \`${{ steps.pick.outputs.patch_hash }}\`.
+
+          - **NuvioFace-…-arm64.apk**: phones, Nvidia Shield
+          - **NuvioFace-…-arm32.apk**: Chromecast with Google TV, onn 4K boxes
+          - **NuvioFaceUpdater.apk**: install once; it keeps Nuvio Face up to date
+
+          versionName: ${FACE_NAME}
+          versionCode: ${FACE_CODE}
+          NOTES
+          sed -i 's/^          //' notes.md
+          gh release create "$tag" out/*.apk -R "$GITHUB_REPOSITORY" \
+            --title "Nuvio Face ${FACE_NAME}" --notes-file notes.md --latest
