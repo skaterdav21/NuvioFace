@@ -85,6 +85,10 @@ open class MainActivity : AppCompatActivity() {
         )
         NuvioAndroidBootstrap.initialize(this)
         super.onCreate(savedInstanceState)
+        com.nuvio.app.core.ui.NuvioDevice.isTv =
+            packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK) ||
+                (getSystemService(android.content.Context.UI_MODE_SERVICE) as? android.app.UiModeManager)
+                    ?.currentModeType == android.content.res.Configuration.UI_MODE_TYPE_TELEVISION
         window.setBackgroundDrawableResource(R.color.nuvio_background)
         pipRemoteActionReceiver = PipRemoteActionReceiver.register(this)
         EpisodeReleaseNotificationPlatform.bindActivity(this)

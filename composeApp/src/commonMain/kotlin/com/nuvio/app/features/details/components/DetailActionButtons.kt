@@ -1,6 +1,8 @@
 package com.nuvio.app.features.details.components
 
 import com.nuvio.app.core.ui.netflixFaceActive
+import com.nuvio.app.core.ui.netflixFocusHighlight
+import androidx.compose.ui.focus.focusRequester
 import com.nuvio.app.core.ui.NetflixColors
 import com.nuvio.app.core.ui.NetflixIconAction
 import com.nuvio.app.core.ui.NetflixSans
@@ -387,6 +389,13 @@ private fun NetflixDetailActions(
     onSaveLongClick: (() -> Unit)?,
 ) {
     val hapticFeedback = LocalHapticFeedback.current
+    val playFocus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+    if (com.nuvio.app.core.ui.NuvioDevice.isTv) {
+        androidx.compose.runtime.LaunchedEffect(playEnabled) {
+            kotlinx.coroutines.delay(300)
+            runCatching { playFocus.requestFocus() }
+        }
+    }
     androidx.compose.foundation.layout.Column(
         modifier = Modifier
             .widthIn(max = if (isTablet) 560.dp else 600.dp)
@@ -395,7 +404,9 @@ private fun NetflixDetailActions(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp),
+                .height(44.dp)
+                .netflixFocusHighlight(RoundedCornerShape(4.dp), focusedScale = 1.03f)
+                .focusRequester(playFocus),
             shape = RoundedCornerShape(4.dp),
             color = if (playEnabled) Color.White else Color.White.copy(alpha = 0.3f),
             contentColor = Color.Black,

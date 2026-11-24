@@ -20,6 +20,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
@@ -104,3 +107,76 @@ fun RowScope.NetflixBottomBarItem(
         )
     }
 }
+
+/** Netflix's TV / tablet menu: wordmark on the left, plain text tabs across the top. */
+@Composable
+fun NetflixTopNav(
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    listOf(Color.Black.copy(alpha = 0.85f), Color.Transparent),
+                ),
+            )
+            .padding(androidx.compose.foundation.layout.WindowInsets.statusBars.asPaddingValues())
+            .padding(start = 48.dp, end = 48.dp, top = 14.dp, bottom = 22.dp),
+        horizontalArrangement = Arrangement.spacedBy(26.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NetflixWordmark(fontSize = 30)
+        Spacer(Modifier.width(10.dp))
+        content()
+    }
+}
+
+@Composable
+fun NetflixTopNavItem(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    leading: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .netflixFocusHighlight(androidx.compose.foundation.shape.RoundedCornerShape(6.dp), focusedScale = 1.05f)
+            .androidxClip6()
+            .selectable(
+                selected = selected,
+                role = Role.Tab,
+                onClick = onClick,
+            )
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (leading != null) {
+            leading()
+            Spacer(Modifier.width(8.dp))
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = label,
+                style = TextStyle(
+                    fontFamily = NetflixSans,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 16.sp,
+                    color = if (selected) Color.White else NetflixColors.TextSecondary,
+                ),
+                maxLines = 1,
+            )
+            Spacer(Modifier.height(3.dp))
+            Box(
+                Modifier
+                    .width(if (selected) 18.dp else 0.dp)
+                    .height(2.dp)
+                    .background(NetflixColors.Red),
+            )
+        }
+    }
+}
+
+private fun Modifier.androidxClip6(): Modifier =
+    this.then(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp)))

@@ -65,6 +65,16 @@ import androidx.compose.ui.unit.sp
 import com.nuvio.app.core.ui.NetflixColors
 import com.nuvio.app.core.ui.NetflixSans
 import com.nuvio.app.core.ui.NuvioLoadingIndicator
+import com.nuvio.app.core.ui.netflixFocusHighlight
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+
+/** Focus target for the play/pause button, so the TV remote can jump into the controls. */
+internal val LocalNetflixPlayerFocus = staticCompositionLocalOf<FocusRequester?> { null }
 
 /**
  * Netflix-style playback controls: back + centered title on top, big rewind / play / forward in
@@ -118,7 +128,15 @@ internal fun NetflixPlayerControls(
         block()
     }
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    val remoteFocus = LocalNetflixPlayerFocus.current
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown) onInteraction()
+                false
+            },
+    ) {
         val compact = maxWidth < 600.dp
         val sidePadding = if (compact) 12.dp else 28.dp
 
@@ -202,7 +220,9 @@ internal fun NetflixPlayerControls(
                 Box(
                     modifier = Modifier
                         .size(84.dp)
+                        .netflixFocusHighlight(CircleShape, focusedScale = 1.1f)
                         .clip(CircleShape)
+                        .then(if (remoteFocus != null) Modifier.focusRequester(remoteFocus) else Modifier)
                         .clickable(onClick = act(onTogglePlayback)),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -292,6 +312,7 @@ private fun NetflixTopIcon(
     Box(
         modifier = Modifier
             .size(44.dp)
+            .netflixFocusHighlight(CircleShape)
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -310,6 +331,7 @@ private fun NetflixCenterButton(
     Box(
         modifier = Modifier
             .size(size + 20.dp)
+            .netflixFocusHighlight(CircleShape)
             .clip(CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -327,6 +349,7 @@ private fun NetflixPlayerAction(
     Row(
         modifier = Modifier
             .widthIn(min = 64.dp)
+            .netflixFocusHighlight(RoundedCornerShape(6.dp))
             .clip(RoundedCornerShape(6.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 8.dp),

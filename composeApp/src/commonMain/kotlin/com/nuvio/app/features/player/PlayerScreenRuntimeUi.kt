@@ -18,6 +18,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.focus.onFocusChanged
+import com.nuvio.app.core.ui.netflixTvActive
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.focus.FocusRequester
@@ -146,6 +151,20 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
     LaunchedEffect(keyFocusRequester) {
         keyFocusRequester.requestFocus()
     }
+    // Netflix face on TV: the remote drives the player. OK = play/pause, left/right = seek,
+    // up/down = show the controls and move focus into them.
+    val netflixTvRemote = netflixTvActive()
+    val netflixControlsFocus = remember { FocusRequester() }
+    var surfaceFocused by remember { mutableStateOf(false) }
+    var focusControlsRequest by remember { mutableStateOf(0) }
+    LaunchedEffect(focusControlsRequest) {
+        if (focusControlsRequest == 0) return@LaunchedEffect
+        delay(80)
+        runCatching { netflixControlsFocus.requestFocus() }
+    }
+    LaunchedEffect(netflixTvRemote, controlsVisible) {
+        if (netflixTvRemote && !controlsVisible) runCatching { keyFocusRequester.requestFocus() }
+    }
 
     BindAutoSyncRuntimeEffects() // AutoSync hook
 
@@ -155,8 +174,50 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
             .padding(end = partyPanelInset)
             .clipToBounds()
             .onSizeChanged { layoutSize = it }
+            .onFocusChanged { surfaceFocused = it.isFocused }
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown || playerControlsLocked) return@onKeyEvent false
+                if (netflixTvRemote) {
+                    when (event.key) {
+                        Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> {
+                            togglePlayback()
+                            controlsVisible = true
+                            return@onKeyEvent true
+                        }
+                        Key.MediaFastForward -> {
+                            if (playbackGesturesEnabled) seekBy(10_000L)
+                            controlsVisible = true
+                            return@onKeyEvent true
+                        }
+                        Key.MediaRewind -> {
+                            if (playbackGesturesEnabled) seekBy(-10_000L)
+                            controlsVisible = true
+                            return@onKeyEvent true
+                        }
+                    }
+                    // A control on screen has focus: let it handle OK and the arrows.
+                    if (!surfaceFocused) return@onKeyEvent false
+                    when (event.key) {
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Spacebar -> {
+                            togglePlayback()
+                            controlsVisible = true
+                        }
+                        Key.DirectionLeft -> {
+                            if (playbackGesturesEnabled) seekBy(-10_000L)
+                            controlsVisible = true
+                        }
+                        Key.DirectionRight -> {
+                            if (playbackGesturesEnabled) seekBy(10_000L)
+                            controlsVisible = true
+                        }
+                        Key.DirectionUp, Key.DirectionDown -> {
+                            controlsVisible = true
+                            focusControlsRequest += 1
+                        }
+                        else -> return@onKeyEvent false
+                    }
+                    return@onKeyEvent true
+                }
                 when {
                     event.key == Key.Spacebar -> togglePlayback()
                     event.key == Key.DirectionLeft && playbackGesturesEnabled -> seekBy(-10_000L)
@@ -303,12 +364,14 @@ internal fun PlayerScreenRuntime.RenderPlayerRuntimeUi(
             )
         }
 
-        RenderPlayerControls(
-            displayedPositionMs = displayedPositionMs,
-            isEpisode = isEpisode,
-            folded = fold != null,
-            modifier = panelModifier,
-        )
+        CompositionLocalProvider(LocalNetflixPlayerFocus provides netflixControlsFocus) {
+            RenderPlayerControls(
+                displayedPositionMs = displayedPositionMs,
+                isEpisode = isEpisode,
+                folded = fold != null,
+                modifier = panelModifier,
+            )
+        }
         Box(modifier = videoModifier) {
             RenderPlaybackOverlays(
                 runtime = runtime,

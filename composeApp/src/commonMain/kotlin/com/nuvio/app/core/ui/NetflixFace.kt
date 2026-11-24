@@ -1,6 +1,16 @@
 package com.nuvio.app.core.ui
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -169,6 +179,7 @@ private fun NetflixButton(
     Row(
         modifier = modifier
             .height(height)
+            .netflixFocusHighlight(RoundedCornerShape(4.dp), focusedScale = 1.05f)
             .clip(RoundedCornerShape(4.dp))
             .background(background)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
@@ -207,6 +218,7 @@ fun NetflixIconAction(
     Column(
         modifier = modifier
             .widthIn(min = 64.dp)
+            .netflixFocusHighlight(RoundedCornerShape(6.dp))
             .clip(RoundedCornerShape(6.dp))
             .netflixCombinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(vertical = 6.dp, horizontal = 4.dp),
@@ -263,3 +275,39 @@ fun NetflixProgressBar(
 }
 
 private fun Modifier.fillMaxWidthFraction(fraction: Float): Modifier = this.fillMaxWidth(fraction)
+
+/** Set once at startup by the Android activity: true on Android TV / Google TV boxes. */
+object NuvioDevice {
+    var isTv: Boolean = false
+}
+
+/** Netflix face on a TV: remote-driven layouts with focus highlights. */
+@Composable
+@ReadOnlyComposable
+fun netflixTvActive(): Boolean = netflixFaceActive() && NuvioDevice.isTv
+
+/**
+ * Netflix-TV focus treatment: the focused element grows a little and gets a white outline.
+ * Put it before the clickable in the chain so it can see the clickable's focus.
+ * On phones nothing is ever focused this way, so it has no effect there.
+ */
+@Composable
+fun Modifier.netflixFocusHighlight(
+    shape: Shape = RoundedCornerShape(4.dp),
+    focusedScale: Float = 1.07f,
+    borderWidth: Dp = 2.dp,
+): Modifier {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (focused) focusedScale else 1f,
+        label = "nf_focus_scale",
+    )
+    return this
+        .zIndex(if (focused) 1f else 0f)
+        .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+        }
+        .then(if (focused) Modifier.border(borderWidth, Color.White, shape) else Modifier)
+        .onFocusChanged { focused = it.hasFocus }
+}

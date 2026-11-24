@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -85,6 +86,12 @@ import com.nuvio.app.core.ui.NetflixProgressBar
 import com.nuvio.app.core.ui.NetflixRowTitle
 import com.nuvio.app.core.ui.NetflixSans
 import com.nuvio.app.core.ui.NetflixWordmark
+import com.nuvio.app.core.ui.NuvioDevice
+import com.nuvio.app.core.ui.netflixFocusHighlight
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import kotlinx.coroutines.delay
 import com.nuvio.app.core.ui.NuvioToastController
 import com.nuvio.app.core.ui.withDuplicateSafeLazyKeys
 import com.nuvio.app.features.collection.Collection
@@ -150,6 +157,79 @@ private val NetflixPosterWidth = 108.dp
 
 @Composable
 internal fun NetflixHomeContent(
+    listState: LazyListState,
+    profileName: String?,
+    heroItems: List<MetaPreview>,
+    showHero: Boolean,
+    heroLoading: Boolean,
+    rows: List<NetflixHomeRow>,
+    continueWatchingItems: List<ContinueWatchingItem>,
+    upcomingItems: List<ContinueWatchingItem>,
+    upcomingTitle: String,
+    isLoading: Boolean,
+    emptyContent: (@Composable () -> Unit)?,
+    watchedKeys: Set<String>,
+    fullyWatchedSeriesKeys: Set<String>,
+    animateCollectionGifs: Boolean,
+    onPosterClick: ((MetaPreview) -> Unit)?,
+    onPosterLongClick: ((MetaPreview) -> Unit)?,
+    onContinueWatchingClick: ((ContinueWatchingItem) -> Unit)?,
+    onContinueWatchingLongPress: ((ContinueWatchingItem) -> Unit)?,
+    onFolderClick: ((collectionId: String, folderId: String) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        if (NuvioDevice.isTv || maxWidth >= 768.dp) {
+        NetflixTvHomeContent(
+            listState = listState,
+            heroItems = heroItems,
+            showHero = showHero,
+            heroLoading = heroLoading,
+            rows = rows,
+            continueWatchingItems = continueWatchingItems,
+            upcomingItems = upcomingItems,
+            continueTitle = if (profileName.isNullOrBlank()) "Continue Watching" else "Continue Watching for $profileName",
+            upcomingTitle = upcomingTitle,
+            isLoading = isLoading,
+            emptyContent = emptyContent,
+            watchedKeys = watchedKeys,
+            fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
+            animateCollectionGifs = animateCollectionGifs,
+            onPosterClick = onPosterClick,
+            onPosterLongClick = onPosterLongClick,
+            onContinueWatchingClick = onContinueWatchingClick,
+            onContinueWatchingLongPress = onContinueWatchingLongPress,
+            onFolderClick = onFolderClick,
+            modifier = Modifier,
+        )
+        } else {
+            NetflixPhoneHomeContent(
+                listState = listState,
+                profileName = profileName,
+                heroItems = heroItems,
+                showHero = showHero,
+                heroLoading = heroLoading,
+                rows = rows,
+                continueWatchingItems = continueWatchingItems,
+                upcomingItems = upcomingItems,
+                upcomingTitle = upcomingTitle,
+                isLoading = isLoading,
+                emptyContent = emptyContent,
+                watchedKeys = watchedKeys,
+                fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
+                animateCollectionGifs = animateCollectionGifs,
+                onPosterClick = onPosterClick,
+                onPosterLongClick = onPosterLongClick,
+                onContinueWatchingClick = onContinueWatchingClick,
+                onContinueWatchingLongPress = onContinueWatchingLongPress,
+                onFolderClick = onFolderClick,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NetflixPhoneHomeContent(
     listState: LazyListState,
     profileName: String?,
     heroItems: List<MetaPreview>,
@@ -709,6 +789,7 @@ private fun NetflixPoster(
         modifier = Modifier
             .width(width)
             .aspectRatio(if (landscape) 16f / 9f else 2f / 3f)
+            .netflixFocusHighlight()
             .clip(RoundedCornerShape(4.dp))
             .background(NetflixColors.Card)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
@@ -927,6 +1008,524 @@ private fun NetflixLoadingRows() {
                             .clip(RoundedCornerShape(4.dp))
                             .background(NetflixColors.Card),
                     )
+                }
+            }
+        }
+    }
+}
+
+
+// ============================== TV ==============================
+
+private val TvSidePadding = 48.dp
+private val TvCardWidth = 232.dp
+
+/**
+ * Netflix on TV: a big billboard (backdrop on the right, logo, synopsis and buttons on the left)
+ * over rows of landscape cards. Everything is reachable with the remote's arrows and OK.
+ */
+@Composable
+private fun NetflixTvHomeContent(
+    listState: LazyListState,
+    heroItems: List<MetaPreview>,
+    showHero: Boolean,
+    heroLoading: Boolean,
+    rows: List<NetflixHomeRow>,
+    continueWatchingItems: List<ContinueWatchingItem>,
+    upcomingItems: List<ContinueWatchingItem>,
+    continueTitle: String,
+    upcomingTitle: String,
+    isLoading: Boolean,
+    emptyContent: (@Composable () -> Unit)?,
+    watchedKeys: Set<String>,
+    fullyWatchedSeriesKeys: Set<String>,
+    animateCollectionGifs: Boolean,
+    onPosterClick: ((MetaPreview) -> Unit)?,
+    onPosterLongClick: ((MetaPreview) -> Unit)?,
+    onContinueWatchingClick: ((ContinueWatchingItem) -> Unit)?,
+    onContinueWatchingLongPress: ((ContinueWatchingItem) -> Unit)?,
+    onFolderClick: ((collectionId: String, folderId: String) -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    val firstFocus = remember { FocusRequester() }
+    val top10Key = remember(rows) {
+        rows.firstOrNull { row ->
+            row is NetflixHomeRow.Catalog && row.title.lowercase().let { "trending" in it || "popular" in it || "top" in it }
+        }?.key
+    }
+    val hasHero = showHero && (heroItems.isNotEmpty() || heroLoading)
+
+    // Land focus on the billboard's Play button (or the first card) once there is something to focus.
+    LaunchedEffect(hasHero, heroItems.isNotEmpty(), rows.isNotEmpty(), continueWatchingItems.isNotEmpty()) {
+        delay(350)
+        runCatching { firstFocus.requestFocus() }
+    }
+
+    BoxWithConstraints(modifier = modifier.fillMaxSize().background(NetflixColors.Black)) {
+        val billboardHeight = (maxHeight * 0.66f).coerceAtLeast(300.dp)
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 48.dp),
+        ) {
+            if (hasHero) {
+                item(key = "tv_billboard") {
+                    NetflixTvBillboard(
+                        items = heroItems,
+                        height = billboardHeight,
+                        playFocus = firstFocus,
+                        onOpen = onPosterClick,
+                        onLongPress = onPosterLongClick,
+                    )
+                }
+            } else {
+                item(key = "tv_top") { Spacer(Modifier.height(96.dp)) }
+            }
+            var focusAssigned = hasHero && heroItems.isNotEmpty()
+            if (continueWatchingItems.isNotEmpty()) {
+                val takeFocus = !focusAssigned
+                focusAssigned = true
+                item(key = "tv_continue") {
+                    NetflixTvContinueRow(continueTitle, continueWatchingItems, true, if (takeFocus) firstFocus else null, onContinueWatchingClick, onContinueWatchingLongPress)
+                }
+            }
+            if (upcomingItems.isNotEmpty()) {
+                item(key = "tv_upcoming") {
+                    NetflixTvContinueRow(upcomingTitle, upcomingItems, false, null, onContinueWatchingClick, onContinueWatchingLongPress)
+                }
+            }
+            rows.forEach { row ->
+                val takeFocus = !focusAssigned && row is NetflixHomeRow.Catalog
+                if (takeFocus) focusAssigned = true
+                item(key = row.key) {
+                    when (row) {
+                        is NetflixHomeRow.Catalog -> if (row.key == top10Key) {
+                            NetflixTvTop10Row(row.title, row.entries.take(10), if (takeFocus) firstFocus else null, onPosterClick, onPosterLongClick)
+                        } else {
+                            NetflixTvCardRow(
+                                title = row.title,
+                                entries = row.entries,
+                                watchedKeys = watchedKeys,
+                                fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
+                                firstFocus = if (takeFocus) firstFocus else null,
+                                onViewAll = row.onViewAll,
+                                onClick = onPosterClick,
+                                onLongClick = onPosterLongClick,
+                            )
+                        }
+                        is NetflixHomeRow.CollectionRow -> HomeCollectionRowSection(
+                            collection = row.collection,
+                            modifier = Modifier.padding(bottom = 22.dp),
+                            sectionPadding = TvSidePadding,
+                            animateGifs = animateCollectionGifs,
+                            onFolderClick = onFolderClick,
+                        )
+                    }
+                }
+            }
+            if (isLoading && rows.isEmpty()) item(key = "tv_loading") { NetflixLoadingRows() }
+            if (!isLoading && emptyContent != null && rows.isEmpty()) {
+                item(key = "tv_empty") { Box(Modifier.padding(top = 24.dp, start = TvSidePadding)) { emptyContent() } }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NetflixTvBillboard(
+    items: List<MetaPreview>,
+    height: Dp,
+    playFocus: FocusRequester,
+    onOpen: ((MetaPreview) -> Unit)?,
+    onLongPress: ((MetaPreview) -> Unit)?,
+) {
+    var index by remember(items) { mutableStateOf(0) }
+    var hasFocusInside by remember { mutableStateOf(false) }
+    val item = items.getOrNull(index)
+
+    // Netflix rotates the billboard while you browse the rows, and holds still while you're on it.
+    LaunchedEffect(items, hasFocusInside) {
+        if (items.size < 2 || hasFocusInside) return@LaunchedEffect
+        while (true) {
+            delay(10_000)
+            index = (index + 1) % items.size
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height)
+            .onFocusChanged { hasFocusInside = it.hasFocus },
+    ) {
+        if (item == null) {
+            Box(Modifier.fillMaxSize().background(NetflixColors.Surface))
+            return@Box
+        }
+        AsyncImage(
+            model = item.banner ?: item.landscapePoster ?: item.poster,
+            contentDescription = null,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .fillMaxWidth(0.78f)
+                .fillMaxHeight(),
+            contentScale = ContentScale.Crop,
+            alignment = Alignment.TopCenter,
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.horizontalGradient(
+                        0f to Color.Black,
+                        0.28f to Color.Black.copy(alpha = 0.92f),
+                        0.55f to Color.Black.copy(alpha = 0.25f),
+                        1f to Color.Transparent,
+                    ),
+                ),
+        )
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(0.6f to Color.Transparent, 1f to Color.Black)),
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .fillMaxWidth(0.42f)
+                .padding(start = TvSidePadding, top = 28.dp),
+        ) {
+            var logoFailed by remember(item.logo) { mutableStateOf(false) }
+            if (!item.logo.isNullOrBlank() && !logoFailed) {
+                AsyncImage(
+                    model = item.logo,
+                    contentDescription = item.name,
+                    modifier = Modifier.widthIn(max = 380.dp).height(110.dp),
+                    contentScale = ContentScale.Fit,
+                    alignment = Alignment.CenterStart,
+                    onError = { logoFailed = true },
+                )
+            } else {
+                Text(
+                    text = item.name.uppercase(),
+                    style = TextStyle(fontFamily = NetflixDisplayFamily, fontSize = 58.sp, lineHeight = 56.sp, color = Color.White, letterSpacing = 1.sp),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val meta = listOfNotNull(
+                item.releaseInfo?.takeIf { it.isNotBlank() },
+                item.ageRating?.takeIf { it.isNotBlank() },
+                item.runtime?.takeIf { it.isNotBlank() },
+            ) + item.genres.take(3)
+            if (meta.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = meta.joinToString("  \u2022  "),
+                    style = TextStyle(fontFamily = NetflixSans, fontWeight = FontWeight.Medium, fontSize = 14.sp, color = NetflixColors.TextSecondary),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (!item.description.isNullOrBlank()) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = item.description,
+                    style = TextStyle(fontFamily = NetflixSans, fontSize = 15.sp, lineHeight = 21.sp, color = Color.White),
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.height(18.dp))
+            val scope = rememberCoroutineScope()
+            val libraryState by LibraryRepository.uiState.collectAsStateWithLifecycle()
+            val saved = remember(libraryState, item.id, item.type) { LibraryRepository.isSaved(item.id, item.type) }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                NetflixPlayButton(
+                    label = "Play",
+                    onClick = { onOpen?.invoke(item) },
+                    modifier = Modifier.focusRequester(playFocus).widthIn(min = 130.dp),
+                    height = 44.dp,
+                )
+                NetflixGreyButton(
+                    label = "My List",
+                    icon = if (saved) Icons.Rounded.Check else Icons.Rounded.Add,
+                    onClick = {
+                        scope.launch {
+                            runCatching { LibraryRepository.toggleSaved(item.toLibraryItem(savedAtEpochMs = 0L)) }
+                                .onSuccess { if (it.requiresRemovalConfirmation) onLongPress?.invoke(item) }
+                                .onFailure { NuvioToastController.show(it.message ?: "Couldn't update My List") }
+                        }
+                    },
+                    modifier = Modifier.widthIn(min = 130.dp),
+                    height = 44.dp,
+                )
+            }
+            if (items.size > 1) {
+                Spacer(Modifier.height(16.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    repeat(items.size.coerceAtMost(10)) { i ->
+                        Box(
+                            Modifier
+                                .size(width = if (i == index) 16.dp else 6.dp, height = 4.dp)
+                                .clip(CircleShape)
+                                .background(if (i == index) Color.White else Color.White.copy(alpha = 0.35f)),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NetflixTvRowTitle(title: String, onViewAll: (() -> Unit)?) {
+    Row(
+        modifier = Modifier.padding(start = TvSidePadding, end = TvSidePadding, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = TextStyle(fontFamily = NetflixSans, fontWeight = FontWeight.Bold, fontSize = 20.sp, color = Color.White),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (onViewAll != null) {
+            Spacer(Modifier.width(10.dp))
+            Box(
+                Modifier
+                    .netflixFocusHighlight(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(onClick = onViewAll)
+                    .padding(horizontal = 10.dp, vertical = 2.dp),
+            ) {
+                Text("See all \u203A", style = TextStyle(fontFamily = NetflixSans, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = NetflixColors.TextSecondary))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NetflixTvCardRow(
+    title: String,
+    entries: List<MetaPreview>,
+    watchedKeys: Set<String>,
+    fullyWatchedSeriesKeys: Set<String>,
+    firstFocus: FocusRequester?,
+    onViewAll: (() -> Unit)?,
+    onClick: ((MetaPreview) -> Unit)?,
+    onLongClick: ((MetaPreview) -> Unit)?,
+) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 22.dp)) {
+        NetflixTvRowTitle(title, onViewAll)
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = TvSidePadding, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            itemsIndexed(entries.withDuplicateSafeLazyKeys { it.stableKey() }, key = { _, it -> it.lazyKey }) { index, keyed ->
+                val item = keyed.value
+                val watched = WatchingState.isPosterWatched(
+                    watchedKeys = watchedKeys,
+                    item = item,
+                    fullyWatchedSeriesKeys = fullyWatchedSeriesKeys,
+                )
+                NetflixTvCard(
+                    imageUrl = item.landscapePoster ?: item.banner ?: item.poster,
+                    title = item.name,
+                    logo = item.logo,
+                    progress = null,
+                    watched = watched,
+                    focusRequester = if (index == 0) firstFocus else null,
+                    onClick = { onClick?.invoke(item) },
+                    onLongClick = onLongClick?.let { { it(item) } },
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NetflixTvCard(
+    imageUrl: String?,
+    title: String,
+    logo: String?,
+    progress: Float?,
+    watched: Boolean,
+    focusRequester: FocusRequester?,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)?,
+    subtitle: String? = null,
+) {
+    Column(
+        modifier = Modifier
+            .width(TvCardWidth)
+            .netflixFocusHighlight(RoundedCornerShape(6.dp), focusedScale = 1.1f, borderWidth = 3.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(NetflixColors.Card)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+            AsyncImage(
+                model = imageUrl,
+                contentDescription = title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.55f)
+                    .align(Alignment.BottomCenter)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)))),
+            )
+            var logoFailed by remember(logo) { mutableStateOf(logo.isNullOrBlank()) }
+            if (!logoFailed) {
+                AsyncImage(
+                    model = logo,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(10.dp)
+                        .fillMaxWidth(0.6f)
+                        .height(34.dp),
+                    contentScale = ContentScale.Fit,
+                    alignment = Alignment.BottomStart,
+                    onError = { logoFailed = true },
+                )
+            } else {
+                Text(
+                    text = title,
+                    modifier = Modifier.align(Alignment.BottomStart).padding(10.dp),
+                    style = TextStyle(fontFamily = NetflixSans, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color.White),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (watched) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(22.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.Check, contentDescription = "Watched", tint = Color.White, modifier = Modifier.size(15.dp))
+                }
+            }
+        }
+        if (progress != null) {
+            NetflixProgressBar(fraction = progress, modifier = Modifier.fillMaxWidth(), height = 4.dp)
+        }
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                style = TextStyle(fontFamily = NetflixSans, fontWeight = FontWeight.Medium, fontSize = 13.sp, color = NetflixColors.TextSecondary),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NetflixTvContinueRow(
+    title: String,
+    items: List<ContinueWatchingItem>,
+    showProgress: Boolean,
+    firstFocus: FocusRequester?,
+    onClick: ((ContinueWatchingItem) -> Unit)?,
+    onLongPress: ((ContinueWatchingItem) -> Unit)?,
+) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 22.dp)) {
+        NetflixTvRowTitle(title, null)
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = TvSidePadding, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            itemsIndexed(
+                items.withDuplicateSafeLazyKeys { "${it.parentMetaId}:${it.seasonNumber}:${it.episodeNumber}" },
+                key = { _, it -> it.lazyKey },
+            ) { index, keyed ->
+                val item = keyed.value
+                val episodeLabel = if (item.seasonNumber != null && item.episodeNumber != null) {
+                    "S${item.seasonNumber}:E${item.episodeNumber}" + (item.episodeTitle?.takeIf { it.isNotBlank() }?.let { "  $it" } ?: "")
+                } else {
+                    item.title
+                }
+                NetflixTvCard(
+                    imageUrl = item.imageUrl ?: item.poster ?: item.rawPosterUrl,
+                    title = item.title,
+                    logo = null,
+                    progress = if (showProgress) item.progressFraction else null,
+                    watched = false,
+                    focusRequester = if (index == 0) firstFocus else null,
+                    onClick = { onClick?.invoke(item) },
+                    onLongClick = onLongPress?.let { { it(item) } },
+                    subtitle = episodeLabel,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun NetflixTvTop10Row(
+    title: String,
+    entries: List<MetaPreview>,
+    firstFocus: FocusRequester?,
+    onClick: ((MetaPreview) -> Unit)?,
+    onLongClick: ((MetaPreview) -> Unit)?,
+) {
+    val density = LocalDensity.current
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 22.dp)) {
+        NetflixTvRowTitle(if ("top 10" in title.lowercase()) title else "Top 10: $title", null)
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = TvSidePadding, vertical = 10.dp),
+        ) {
+            itemsIndexed(entries.withDuplicateSafeLazyKeys { "tvtop10_" + it.stableKey() }, key = { _, it -> it.lazyKey }) { index, keyed ->
+                val item = keyed.value
+                Box(Modifier.width(if (index + 1 >= 10) 230.dp else 196.dp).height(186.dp)) {
+                    Text(
+                        text = "${index + 1}",
+                        modifier = Modifier.align(Alignment.BottomStart).offset(y = 24.dp),
+                        style = TextStyle(
+                            fontFamily = NetflixSans,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 168.sp,
+                            letterSpacing = (-10).sp,
+                            color = Color(0xFF8C8C8C),
+                            drawStyle = Stroke(width = with(density) { 3.dp.toPx() }),
+                        ),
+                        maxLines = 1,
+                    )
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .width(124.dp)
+                            .aspectRatio(2f / 3f)
+                            .netflixFocusHighlight(RoundedCornerShape(4.dp), focusedScale = 1.1f, borderWidth = 3.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(NetflixColors.Card)
+                            .then(if (index == 0 && firstFocus != null) Modifier.focusRequester(firstFocus) else Modifier)
+                            .combinedClickable(
+                                onClick = { onClick?.invoke(item) },
+                                onLongClick = onLongClick?.let { { it(item) } },
+                            ),
+                    ) {
+                        AsyncImage(
+                            model = item.poster ?: item.rawPosterUrl,
+                            contentDescription = item.name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                        )
+                    }
                 }
             }
         }

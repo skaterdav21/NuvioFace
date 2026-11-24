@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.outlined.Home
 import com.nuvio.app.core.ui.NetflixBottomBar
 import com.nuvio.app.core.ui.NetflixBottomBarItem
+import com.nuvio.app.core.ui.NetflixTopNav
+import com.nuvio.app.core.ui.NetflixTopNavItem
 import com.nuvio.app.core.ui.netflixFaceActive
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -215,7 +217,30 @@ internal fun MainTabsDestination(
                     )
                 }
 
-                if (isTabletLayout && !useNativeBottomTabs) {
+                if (isTabletLayout && !useNativeBottomTabs && netflixFace) {
+                    NetflixTopNav(modifier = Modifier.align(Alignment.TopCenter)) {
+                        NetflixTopNavItem(
+                            label = stringResource(Res.string.compose_nav_search),
+                            selected = selectedTab == AppScreenTab.Search,
+                            onClick = { onTabSelected(AppScreenTab.Search) },
+                        )
+                        NetflixTopNavItem(
+                            label = stringResource(Res.string.compose_nav_home),
+                            selected = selectedTab == AppScreenTab.Home,
+                            onClick = { onTabSelected(AppScreenTab.Home) },
+                        )
+                        NetflixTopNavItem(
+                            label = "My List",
+                            selected = selectedTab == AppScreenTab.Library,
+                            onClick = { onTabSelected(AppScreenTab.Library) },
+                        )
+                        NetflixTopNavItem(
+                            label = "My Nuvio",
+                            selected = selectedTab == AppScreenTab.Settings,
+                            onClick = { onTabSelected(AppScreenTab.Settings) },
+                        )
+                    }
+                } else if (isTabletLayout && !useNativeBottomTabs) {
                     val tabletNavBarScrollState = remember { NuvioNavBarScrollState().apply { collapse() } }
                     FloatingNavigationBar(
                         modifier = Modifier.align(Alignment.TopCenter).widthIn(max = 416.dp),

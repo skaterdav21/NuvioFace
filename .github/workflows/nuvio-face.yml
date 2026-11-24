@@ -122,18 +122,28 @@ jobs:
           -Pnuvio.applicationId=${{ env.APP_ID }}
           --stacktrace
 
-      - name: Collect APK
+      - name: Collect APKs
         shell: bash
         run: |
           ls -la androidApp/build/outputs/apk/full/release/
-          mkdir -p out
-          apk="$(ls androidApp/build/outputs/apk/full/release/*arm64-v8a*.apk | head -n1)"
-          cp "$apk" "out/${APK_BASENAME}-${GITHUB_RUN_NUMBER}-arm64.apk"
+          mkdir -p out64 out32
+          cp "$(ls androidApp/build/outputs/apk/full/release/*arm64-v8a*.apk | head -n1)" "out64/${APK_BASENAME}-${GITHUB_RUN_NUMBER}-arm64.apk"
+          cp "$(ls androidApp/build/outputs/apk/full/release/*armeabi-v7a*.apk | head -n1)" "out32/${APK_BASENAME}-${GITHUB_RUN_NUMBER}-arm32.apk"
 
-      - name: Upload APK
+      # Phones, Nvidia Shield.
+      - name: Upload arm64 APK
         uses: actions/upload-artifact@v7
         with:
-          path: out/${{ env.APK_BASENAME }}-${{ github.run_number }}-arm64.apk
+          path: out64/${{ env.APK_BASENAME }}-${{ github.run_number }}-arm64.apk
+          archive: false
+          if-no-files-found: error
+          retention-days: 30
+
+      # Chromecast with Google TV, onn 4K boxes and other 32-bit Android TV devices.
+      - name: Upload arm32 APK
+        uses: actions/upload-artifact@v7
+        with:
+          path: out32/${{ env.APK_BASENAME }}-${{ github.run_number }}-arm32.apk
           archive: false
           if-no-files-found: error
           retention-days: 30
